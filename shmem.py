@@ -280,26 +280,41 @@ class MPIShared(object):
         sys.stdout.flush()
         # Explicit barrier here, to ensure that we don't try to update
         # data while other processes are reading.
-        self._comm.barrier()
+        if self._comm is not None:
+            self._comm.barrier()
 
         # First check that the dimensions of the data and the offset tuple
         # match the shape of the data.
 
         if self._rank == fromrank:
+            print("proc {} checking inputs: {} {} {} : {} {}".format(self._rank, len(data.shape), len(offset), data.dtype, len(self._shape), self._dtype))
+            sys.stdout.flush()
             if len(data.shape) != len(self._shape):
                 msg = "data has incompatible number of dimensions"
                 if self._comm is not None:
                     print(msg)
-                    self._comm.Abort()
+                    sys.stdout.flush()
+                    #self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
             if len(offset) != len(self._shape):
                 msg = "offset tuple has incompatible number of dimensions"
                 if self._comm is not None:
                     print(msg)
-                    self._comm.Abort()
+                    sys.stdout.flush()
+                    #self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
+            if data.dtype != self._dtype:
+                msg = "input data has different type than shared array"
+                if self._comm is not None:
+                    print(msg)
+                    sys.stdout.flush()
+                    #self._comm.Abort()
+                else:
+                    raise RuntimeError(msg)
+            print("proc {} inputs good".format(self._rank))
+            sys.stdout.flush()
 
         # The input data is coming from exactly one process on one node.
         # First, we broadcast the data from this process to the same node-rank
@@ -346,9 +361,13 @@ class MPIShared(object):
                 if self._mynode == fromnode:
                     datashape = data.shape
                 datashape = self._rankcomm.bcast(datashape, root=fromnode)
+                
+                print("proc {} using datashape {}".format(self._rank, datashape))
+                sys.stdout.flush()
+
                 nodedata = None
                 if self._mynode == fromnode:
-                    nodedata = data
+                    nodedata = np.copy(data)
                 else:
                     nodedata = np.zeros(datashape, dtype=self._dtype)
 
@@ -408,7 +427,8 @@ class MPIShared(object):
         sys.stdout.flush()
         # Explicit barrier here, to ensure that other processes do not try
         # reading data before the writing processes have finished.
-        self._comm.barrier()
+        if self._comm is not None:
+            self._comm.barrier()
 
         print("proc {} leaving set()".format(self._rank))
         sys.stdout.flush()
