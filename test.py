@@ -17,7 +17,7 @@ rank = comm.rank
 procs = comm.size
 
 # Dimensions of our shared memory array
-datadims = (2, 2, 10)
+datadims = (2, 5, 10)
 
 # Data type of our shared memory array
 datatype = np.float64
@@ -34,10 +34,14 @@ local *= rank
 with MPIShared(local.shape, local.dtype, comm) as shm:
 
     for p in range(procs):
+        # Everybody wait...
+        comm.barrier()
+
         # Every process takes turns writing to the buffer.
         if p == rank:
             # My turn!  Write my process rank to the whole buffer.
             shm.set(local, (0, 0, 0), rank)
+        
         # Everybody wait...
         comm.barrier()
 

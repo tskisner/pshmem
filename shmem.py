@@ -153,18 +153,14 @@ class MPIShared(object):
             status = 0
             try:
                 self._buffer, dsize = self._win.Shared_query(0)
-                print("buffer shape = ", self._buffer.shape)
             except:
                 status = 1
             self._checkabort(self._nodecomm, status, "shared memory query")
 
             # Create a numpy array which acts as a "view" of the buffer.
             self._dbuf = np.array(self._buffer, dtype="B", copy=False)
-            print("raw buf size = ", self._dbuf.shape)
             self._flat = self._dbuf.view(self._dtype)
-            print("flat buf size = ", self._flat.shape)
             self._data = self._flat.reshape(self._shape)
-            print("data buf size = ", self._data.shape)
 
             # Initialize to zero.  Any of the processes could do this to the
             # whole buffer, but it is safe and easy for each process to just
