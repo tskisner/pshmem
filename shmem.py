@@ -335,6 +335,16 @@ class MPIShared(object):
                 # Release the write-lock
                 self._win.Unlock(self._noderank)
 
+        else:
+            # We are just copying to a numpy array...
+            dslice = []
+            ndims = len(data.shape)
+            for d in range(ndims):
+                dslice.append( slice(offset[d], offset[d]+data.shape[d]) )
+            slc = tuple(dslice)
+
+            self._data[slc] = data
+
         return
 
 
