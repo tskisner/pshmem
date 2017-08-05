@@ -14,3 +14,9 @@ node copies that piece into the shared array.
 All processes on all nodes can freely read data from the node-local
 copy of the shared array.
 
+### Simple Test
+
+You can run the simple test with:
+
+    $> mpirun -np 4 python3 test.py
+
