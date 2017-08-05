@@ -301,6 +301,7 @@ class MPIShared(object):
 
         if self._comm is not None:
             target_noderank = self._comm.bcast(self._noderank, root=fromrank)
+            fromnode = self._comm.bcast(self._mynode, root=fromrank)
             
             # Verify that the node rank with the data actually has a member on
             # every node (see notes in the constructor).
@@ -315,7 +316,7 @@ class MPIShared(object):
                 # We are the lucky process on this node that gets to write
                 # the data into shared memory!
 
-                nodedata = self._rankcomm.bcast(data, root=self._mynode)
+                nodedata = self._rankcomm.bcast(data, root=fromnode)
 
                 # Now one process on every node has a copy of the data, and
                 # can copy it into the shared memory buffer.
