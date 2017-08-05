@@ -276,6 +276,12 @@ class MPIShared(object):
         Returns:
             Nothing
         """
+        print("proc {} set start barrier()".format(self._rank))
+        sys.stdout.flush()
+        # Explicit barrier here, to ensure that we don't try to update
+        # data while other processes are reading.
+        self._comm.barrier()
+
         # First check that the dimensions of the data and the offset tuple
         # match the shape of the data.
 
@@ -302,7 +308,12 @@ class MPIShared(object):
         if self._comm is not None:
             target_noderank = self._comm.bcast(self._noderank, root=fromrank)
             fromnode = self._comm.bcast(self._mynode, root=fromrank)
-            
+
+            if self._comm.rank == 0:
+                print("target_noderank = {}".format(target_noderank))
+                print("fromnode = {}".format(fromnode))
+                sys.stdout.flush()
+
             # Verify that the node rank with the data actually has a member on
             # every node (see notes in the constructor).
             if target_noderank > self._maxsetrank:
@@ -311,40 +322,96 @@ class MPIShared(object):
                         " not exist on all nodes")
                     self._comm.Abort()
 
-            nodedata = None
             if self._noderank == target_noderank:
                 # We are the lucky process on this node that gets to write
                 # the data into shared memory!
+                print("proc {} on node {} doing bcast".format(self._rank, self._mynode))
+                sys.stdout.flush()
 
-                nodedata = self._rankcomm.bcast(data, root=fromnode)
+                print("rankcomm has {} processes".format(self._rankcomm.size))
+                sys.stdout.flush()
+
+                # Broadcast the offsets of the input slice
+                copyoffset = None
+                if self._mynode == fromnode:
+                    copyoffset = offset
+                copyoffset = self._rankcomm.bcast(copyoffset, root=fromnode)
+
+                print("proc {} using offsets {}".format(self._rank, copyoffset))
+                sys.stdout.flush()
+
+                # Pre-allocate buffer, so that we can use the low-level
+                # (and faster) Bcast method.
+                datashape = None
+                if self._mynode == fromnode:
+                    datashape = data.shape
+                datashape = self._rankcomm.bcast(datashape, root=fromnode)
+                nodedata = None
+                if self._mynode == fromnode:
+                    nodedata = data
+                else:
+                    nodedata = np.zeros(datashape, dtype=self._dtype)
+
+                # Broadcast the data buffer
+                self._rankcomm.Bcast(nodedata, root=fromnode)
+
+                print("proc {} out of bcast".format(self._rank))
+                sys.stdout.flush()
+                self._rankcomm.barrier()
+                
+                print("proc {} has data {}".format(self._rank, nodedata))
+                sys.stdout.flush()
 
                 # Now one process on every node has a copy of the data, and
                 # can copy it into the shared memory buffer.
 
                 dslice = []
-                ndims = len(data.shape)
+                ndims = len(nodedata.shape)
                 for d in range(ndims):
-                    dslice.append( slice(offset[d], offset[d]+data.shape[d]) )
+                    dslice.append( slice(copyoffset[d], 
+                        copyoffset[d]+nodedata.shape[d], 1) )
                 slc = tuple(dslice)
 
+                print("proc {} using slab {}".format(self._rank, slc))
+                sys.stdout.flush()
+                self._rankcomm.barrier()
+
                 # Get a write-lock on the shared memory
+                print("proc {} locking window".format(self._rank))
+                sys.stdout.flush()
                 self._win.Lock(self._noderank, MPI.LOCK_EXCLUSIVE)
+                self._rankcomm.barrier()
 
                 # Copy data slice
-                self._data[slc] = data
+                print("proc {} copying data".format(self._rank))
+                sys.stdout.flush()
+                self._data[slc] = nodedata
+                self._rankcomm.barrier()
 
                 # Release the write-lock
+                print("proc {} unlocking window".format(self._rank))
+                sys.stdout.flush()
                 self._win.Unlock(self._noderank)
+                self._rankcomm.barrier()
 
         else:
             # We are just copying to a numpy array...
             dslice = []
             ndims = len(data.shape)
             for d in range(ndims):
-                dslice.append( slice(offset[d], offset[d]+data.shape[d]) )
+                dslice.append( slice(offset[d], offset[d]+data.shape[d], 1) )
             slc = tuple(dslice)
 
             self._data[slc] = data
+
+        print("proc {} set end barrier()".format(self._rank))
+        sys.stdout.flush()
+        # Explicit barrier here, to ensure that other processes do not try
+        # reading data before the writing processes have finished.
+        self._comm.barrier()
+
+        print("proc {} leaving set()".format(self._rank))
+        sys.stdout.flush()
 
         return
 
