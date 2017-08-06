@@ -56,8 +56,6 @@ with MPIShared(local.shape, local.dtype, comm) as shm:
                 setdata = local[setoffset[0]:setoffset[0]+updatedims[0],
                                 setoffset[1]:setoffset[1]+updatedims[1],
                                 setoffset[2]:setoffset[2]+updatedims[2]]
-                print("proc {} setting data {}".format(rank, setdata))
-                sys.stdout.flush()
             try:
                 # All processes call set(), but only data on rank p matters.
                 shm.set(setdata, setoffset, p)
@@ -73,10 +71,10 @@ with MPIShared(local.shape, local.dtype, comm) as shm:
             z = setoffset[2]
             
             z += updatedims[2]
-            if z > datadims[2]:
+            if z >= datadims[2]:
                 z = 0
                 y += updatedims[1]
-            if y > datadims[1]:
+            if y >= datadims[1]:
                 y = 0
                 x += updatedims[0]
 
@@ -91,5 +89,5 @@ with MPIShared(local.shape, local.dtype, comm) as shm:
         truth *= p
 
         # This should be bitwise identical, even for floats
-        #nt.assert_equal(check[:,:,:], truth[:,:,:])
+        nt.assert_equal(check[:,:,:], truth[:,:,:])
 
