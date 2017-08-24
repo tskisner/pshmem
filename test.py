@@ -11,11 +11,28 @@ import numpy as np
 import numpy.testing as nt
 
 from shmem import MPIShared
+from locking import MPILock
 
 
 comm = MPI.COMM_WORLD
 rank = comm.rank
 procs = comm.size
+
+# Test simple locking
+#========================
+
+lock = MPILock(comm)
+
+msg = "process {} got the lock".format(rank)
+
+lock.lock()
+print(msg)
+sys.stdout.flush()
+lock.unlock()
+
+
+# Test shared memory
+#========================
 
 # Dimensions of our shared memory array
 datadims = (2, 5, 10)
