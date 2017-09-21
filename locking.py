@@ -92,7 +92,7 @@ class MPILock(object):
 
         This call blocks until lock is available.
         """
-        self._win.Lock(self._rank, MPI.LOCK_EXCLUSIVE)
+        self._win.Lock(0, MPI.LOCK_EXCLUSIVE)
         return
 
 
@@ -100,6 +100,6 @@ class MPILock(object):
         """
         Unlock and return.
         """
-        self._win.Unlock(self._rank)
+        self._win.Unlock(0)
         return
 
