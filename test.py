@@ -21,9 +21,10 @@ procs = comm.size
 # Test simple locking
 #========================
 
-lock = MPILock(comm)
+lock = MPILock(comm, root=0, debug=True)
+#lock = MPILock(comm)
 
-msg = "process {} got the lock".format(rank)
+msg = "test:  process {} got the lock".format(rank)
 
 lock.lock()
 print(msg)
