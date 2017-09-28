@@ -119,8 +119,6 @@ class MPILock(object):
         """
         # Do we already have the lock?
         if self._have_lock:
-            print("lock:  rank {}, instance {} already has the lock".format(
-                self._rank, self._tag), flush=True)
             return
 
         waiting = np.zeros((self._procs,), dtype=np.uint8)
@@ -182,8 +180,6 @@ class MPILock(object):
         """
         # Do we even have the lock?
         if not self._have_lock:
-            print("unlock:  rank {}, instance {} does not have the lock".format(
-                self._rank, self._tag), flush=True)
             return
 
         waiting = np.zeros((self._procs,), dtype=np.uint8)
