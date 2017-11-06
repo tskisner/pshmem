@@ -7,6 +7,8 @@
 from mpi4py import MPI
 
 import sys
+import time
+
 import numpy as np
 import numpy.testing as nt
 
@@ -29,6 +31,7 @@ msg = "test:  process {} got the lock".format(rank)
 lock.lock()
 print(msg)
 sys.stdout.flush()
+time.sleep(1)
 lock.unlock()
 
 
@@ -108,4 +111,17 @@ with MPIShared(local.shape, local.dtype, comm) as shm:
 
         # This should be bitwise identical, even for floats
         nt.assert_equal(check[:,:,:], truth[:,:,:])
+
+    # Ensure that we can reference the memory buffer from numpy without
+    # a memory copy.  The intention is that a slice of the shared memory
+    # buffer should appear as a C-contiguous ndarray whenever we slice
+    # along the last dimension.
+
+    for p in range(procs):
+        if p == rank:
+            slc = shm[1,2]
+            print("proc {} slice has dims {}, dtype {}, C = {}".format(\
+                p, slc.shape, slc.dtype.str, slc.flags["C_CONTIGUOUS"]),
+                flush=True)
+        comm.barrier()
 
