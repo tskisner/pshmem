@@ -305,8 +305,9 @@ class MPIShared(object):
                 else:
                     raise RuntimeError(msg)
             if data.dtype != self._dtype:
-                msg = "input data type {} incompatible with "\
-                    "buffer ({})".format(data.dtype.str, self._dtype.str)
+                msg = "input data type ({}, {}) incompatible with "\
+                    "buffer ({}, {})".format(data.dtype.str, data.dtype.num,
+                    self._dtype.str, self._dtype.str)
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
