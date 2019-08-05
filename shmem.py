@@ -1,5 +1,5 @@
 ##
-##  Copyright (c) 2017, all rights reserved.  Use of this source code 
+##  Copyright (c) 2017, all rights reserved.  Use of this source code
 ##  is governed by a BSD license that can be found in the top-level
 ##  LICENSE file.
 ##
@@ -37,14 +37,14 @@ class MPIShared(object):
         self._dtype = dtype
 
         # Global communicator.
-        
+
         self._comm = comm
         self._rank = 0
         self._procs = 1
         if self._comm is not None:
             self._rank = self._comm.rank
             self._procs = self._comm.size
-        
+
         # Compute the flat-packed buffer size.
 
         self._n = 1
@@ -55,7 +55,7 @@ class MPIShared(object):
         # create an inter-node communicator between corresponding
         # processes on all nodes (for use in "setting" slices of the
         # buffer.
-        
+
         self._nodecomm = None
         self._rankcomm = None
         self._noderank = 0
@@ -89,7 +89,7 @@ class MPIShared(object):
         # allocated memory to locations across the node.
 
         # FIXME: the above statement works fine for allocating the window,
-        # and it is also great in C/C++ where the pointer to the start of 
+        # and it is also great in C/C++ where the pointer to the start of
         # the buffer is all you need.  In mpi4py, querying the rank-0 buffer
         # returns a buffer-interface-compatible object, not just a pointer.
         # And this "buffer object" has the size of just the rank-0 allocated
@@ -107,7 +107,7 @@ class MPIShared(object):
             self._localoffset = 0
             self._nlocal = 0
 
-        # Allocate the shared memory buffer and wrap it in a 
+        # Allocate the shared memory buffer and wrap it in a
         # numpy array.  If the communicator is None, just make
         # a normal numpy array.
 
@@ -133,12 +133,12 @@ class MPIShared(object):
                 self._mpitype = MPI._typedict[self._dtype.char]
             except:
                 status = 1
-            self._checkabort(self._comm, status, 
+            self._checkabort(self._comm, status,
                 "numpy to MPI type conversion")
 
             dsize = self._mpitype.Get_size()
 
-        # Number of bytes in our buffer 
+        # Number of bytes in our buffer
         nbytes = self._nlocal * dsize
 
         self._buffer = None
@@ -151,11 +151,11 @@ class MPIShared(object):
             # process pieces are guaranteed to be contiguous.
             status = 0
             try:
-                self._win = MPI.Win.Allocate_shared(nbytes, dsize, 
+                self._win = MPI.Win.Allocate_shared(nbytes, dsize,
                     comm=self._nodecomm)
             except:
                 status = 1
-            self._checkabort(self._nodecomm, status, 
+            self._checkabort(self._nodecomm, status,
                 "shared memory allocation")
 
             # Every process looks up the memory address of rank zero's piece,
@@ -176,8 +176,8 @@ class MPIShared(object):
         # whole buffer, but it is safe and easy for each process to just
         # initialize its local piece.
 
-        # FIXME: change this back once every process is allocating a 
-        # piece of the buffer.            
+        # FIXME: change this back once every process is allocating a
+        # piece of the buffer.
         # self._flat[self._localoffset:self._localoffset + self._nlocal] = 0
         if self._noderank == 0:
             self._flat[:] = 0
@@ -185,7 +185,7 @@ class MPIShared(object):
 
     def __del__(self):
         self.close()
-        
+
 
     def __enter__(self):
         return self
@@ -257,6 +257,7 @@ class MPIShared(object):
             if comm.rank == 0:
                 print("MPIShared: one or more processes failed: {}".format(
                     msg))
+                sys.stdout.flush()
             comm.Abort()
         return
 
@@ -266,9 +267,9 @@ class MPIShared(object):
         Set the values of a slice of the shared array.
 
         This call is collective across the full communicator, but only the
-        data input from process "fromrank" is meaningful.  The offset 
+        data input from process "fromrank" is meaningful.  The offset
         specifies the starting element along each dimension when copying
-        the data into the shared array.  Regardless of which node the 
+        the data into the shared array.  Regardless of which node the
         "fromrank" process is on, the data will be replicated to the
         shared memory buffer on all nodes.
 
@@ -356,7 +357,7 @@ class MPIShared(object):
                 if self._mynode == fromnode:
                     datashape = data.shape
                 datashape = self._rankcomm.bcast(datashape, root=fromnode)
-                
+
                 nodedata = None
                 if self._mynode == fromnode:
                     nodedata = np.copy(data)
@@ -372,7 +373,7 @@ class MPIShared(object):
                 dslice = []
                 ndims = len(nodedata.shape)
                 for d in range(ndims):
-                    dslice.append( slice(copyoffset[d], 
+                    dslice.append( slice(copyoffset[d],
                         copyoffset[d]+nodedata.shape[d], 1) )
                 slc = tuple(dslice)
 
@@ -410,4 +411,3 @@ class MPIShared(object):
     def __setitem__(self, key, value):
         raise NotImplementedError("Setting individual array elements not"
             " supported.  Use the set() method instead.")
-
