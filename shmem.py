@@ -197,9 +197,10 @@ class MPIShared(object):
 
 
     def close(self):
-        # The shared memory window is automatically freed
-        # when the class instance is garbage collected.
-        # This function is for any other clean up on destruction.
+        # Explicitly free the shared memory window.
+        if self._win is not None:
+            self._win.Free()
+            self._win = None
         return
 
 
