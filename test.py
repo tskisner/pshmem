@@ -1,7 +1,7 @@
 ##
-##  Copyright (c) 2017, all rights reserved.  Use of this source code 
-##  is governed by a BSD license that can be found in the top-level
-##  LICENSE file.
+# Copyright (c) 2017-2019, all rights reserved.  Use of this source code
+# is governed by a BSD license that can be found in the top-level
+# LICENSE file.
 ##
 
 from mpi4py import MPI
@@ -85,9 +85,9 @@ def run_test_shmem(comm, datatype):
             for upd in range(nupdate):
                 if p == rank:
                     # My turn!  Write my process rank to the buffer slab.
-                    setdata = local[setoffset[0]:setoffset[0]+updatedims[0],
-                                    setoffset[1]:setoffset[1]+updatedims[1],
-                                    setoffset[2]:setoffset[2]+updatedims[2]]
+                    setdata = local[setoffset[0]:setoffset[0] + updatedims[0],
+                                    setoffset[1]:setoffset[1] + updatedims[1],
+                                    setoffset[2]:setoffset[2] + updatedims[2]]
                 try:
                     # All processes call set(), but only data on rank p matters.
                     shm.set(setdata, setoffset, fromrank=p)
@@ -98,13 +98,13 @@ def run_test_shmem(comm, datatype):
                         comm.Abort()
                     else:
                         sys.exit(1)
-                
+
                 # Increment the write offset within the array
-                
+
                 x = setoffset[0]
                 y = setoffset[1]
                 z = setoffset[2]
-                
+
                 z += updatedims[2]
                 if z >= datadims[2]:
                     z = 0
@@ -115,16 +115,16 @@ def run_test_shmem(comm, datatype):
 
                 setoffset = (x, y, z)
 
-            # Every process is now going to read a copy from the shared memory 
+            # Every process is now going to read a copy from the shared memory
             # and make sure that they see the data written by the current process.
             check = np.zeros_like(local)
-            check[:,:,:] = shm[:,:,:]
+            check[:, :, :] = shm[:, :, :]
 
             truth = np.ones_like(local)
             truth *= p
 
             # This should be bitwise identical, even for floats
-            nt.assert_equal(check[:,:,:], truth[:,:,:])
+            nt.assert_equal(check[:, :, :], truth[:, :, :])
 
         # Ensure that we can reference the memory buffer from numpy without
         # a memory copy.  The intention is that a slice of the shared memory
@@ -133,8 +133,8 @@ def run_test_shmem(comm, datatype):
 
         for p in range(procs):
             if p == rank:
-                slc = shm[1,2]
-                print("proc {} slice has dims {}, dtype {}, C = {}".format(\
+                slc = shm[1, 2]
+                print("proc {} slice has dims {}, dtype {}, C = {}".format(
                     p, slc.shape, slc.dtype.str, slc.flags["C_CONTIGUOUS"]),
                     flush=True)
             if comm is not None:
@@ -143,6 +143,7 @@ def run_test_shmem(comm, datatype):
     return
 
 # Run all tests with COMM_WORLD
+
 
 comm = MPI.COMM_WORLD
 

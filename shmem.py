@@ -1,7 +1,7 @@
 ##
-##  Copyright (c) 2017, all rights reserved.  Use of this source code
-##  is governed by a BSD license that can be found in the top-level
-##  LICENSE file.
+# Copyright (c) 2017-2019, all rights reserved.  Use of this source code
+# is governed by a BSD license that can be found in the top-level
+# LICENSE file.
 ##
 
 import sys
@@ -32,6 +32,7 @@ class MPIShared(object):
         comm (MPI.Comm): the full communicator to use.  This may span
             multiple nodes, and each node will have a copy.
     """
+
     def __init__(self, shape, dtype, comm):
         self._shape = shape
         self._dtype = dtype
@@ -134,7 +135,7 @@ class MPIShared(object):
             except:
                 status = 1
             self._checkabort(self._comm, status,
-                "numpy to MPI type conversion")
+                             "numpy to MPI type conversion")
 
             dsize = self._mpitype.Get_size()
 
@@ -144,7 +145,7 @@ class MPIShared(object):
         self._buffer = None
         if self._comm is None:
             self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"),
-                order="C")
+                                      order="C")
         else:
             import mpi4py.MPI as MPI
             # Every process allocates a piece of the buffer.  The per-
@@ -152,11 +153,11 @@ class MPIShared(object):
             status = 0
             try:
                 self._win = MPI.Win.Allocate_shared(nbytes, dsize,
-                    comm=self._nodecomm)
+                                                    comm=self._nodecomm)
             except:
                 status = 1
             self._checkabort(self._nodecomm, status,
-                "shared memory allocation")
+                             "shared memory allocation")
 
             # Every process looks up the memory address of rank zero's piece,
             # which is the start of the contiguous shared buffer.
@@ -182,19 +183,15 @@ class MPIShared(object):
         if self._noderank == 0:
             self._flat[:] = 0
 
-
     def __del__(self):
         self.close()
-
 
     def __enter__(self):
         return self
 
-
     def __exit__(self, type, value, tb):
         self.close()
         return False
-
 
     def close(self):
         # Explicitly free the shared memory window.
@@ -203,14 +200,12 @@ class MPIShared(object):
             self._win = None
         return
 
-
     @property
     def shape(self):
         """
         The tuple of dimensions of the shared array.
         """
         return self._shape
-
 
     @property
     def dtype(self):
@@ -219,7 +214,6 @@ class MPIShared(object):
         """
         return self._dtype
 
-
     @property
     def comm(self):
         """
@@ -227,14 +221,12 @@ class MPIShared(object):
         """
         return self._comm
 
-
     @property
     def nodecomm(self):
         """
         The node-local communicator.
         """
         return self._nodecomm
-
 
     def _disthelper(self, n, groups):
         dist = []
@@ -247,9 +239,8 @@ class MPIShared(object):
                 first = i * myn
             else:
                 first = ((myn + 1) * leftover) + (myn * (i - leftover))
-            dist.append( (first, myn) )
+            dist.append((first, myn))
         return dist
-
 
     def _checkabort(self, comm, status, msg):
         import mpi4py.MPI as MPI
@@ -261,7 +252,6 @@ class MPIShared(object):
                 sys.stdout.flush()
             comm.Abort()
         return
-
 
     def set(self, data, offset, fromrank=0):
         """
@@ -317,7 +307,7 @@ class MPIShared(object):
             if data.dtype != self._dtype:
                 msg = "input data type ({}, {}) incompatible with "\
                     "buffer ({}, {})".format(data.dtype.str, data.dtype.num,
-                    self._dtype.str, self._dtype.num)
+                                             self._dtype.str, self._dtype.num)
                 if self._comm is not None:
                     print(msg)
                     sys.stdout.flush()
@@ -339,7 +329,7 @@ class MPIShared(object):
             if target_noderank > self._maxsetrank:
                 if self._rank == 0:
                     print("set() called with data from a node rank which does"
-                        " not exist on all nodes")
+                          " not exist on all nodes")
                     self._comm.Abort()
 
             if self._noderank == target_noderank:
@@ -374,8 +364,8 @@ class MPIShared(object):
                 dslice = []
                 ndims = len(nodedata.shape)
                 for d in range(ndims):
-                    dslice.append( slice(copyoffset[d],
-                        copyoffset[d]+nodedata.shape[d], 1) )
+                    dslice.append(slice(copyoffset[d],
+                                        copyoffset[d] + nodedata.shape[d], 1))
                 slc = tuple(dslice)
 
                 # Get a write-lock on the shared memory
@@ -392,7 +382,7 @@ class MPIShared(object):
             dslice = []
             ndims = len(data.shape)
             for d in range(ndims):
-                dslice.append( slice(offset[d], offset[d]+data.shape[d], 1) )
+                dslice.append(slice(offset[d], offset[d] + data.shape[d], 1))
             slc = tuple(dslice)
 
             self._data[slc] = data
@@ -404,11 +394,9 @@ class MPIShared(object):
 
         return
 
-
     def __getitem__(self, key):
         return self._data[key]
 
-
     def __setitem__(self, key, value):
         raise NotImplementedError("Setting individual array elements not"
-            " supported.  Use the set() method instead.")
+                                  " supported.  Use the set() method instead.")
