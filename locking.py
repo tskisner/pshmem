@@ -1,5 +1,5 @@
 ##
-# Copyright (c) 2017-2019, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
@@ -24,6 +24,7 @@ class MPILock(object):
         root (int): the rank which stores the list of waiting processes.
         debug (bool): if True, print debugging info about the lock status.
     """
+
     # This creates a new integer for each time the class is instantiated.
     newid = next(itertools.count())
 
@@ -57,17 +58,19 @@ class MPILock(object):
 
         if self._comm is not None:
             from mpi4py import MPI
+
             # Root allocates the buffer
             status = 0
             try:
                 self._win = MPI.Win.Create(self._waiting, comm=self._comm)
             except:
                 if self._debug:
-                    print("rank {} win create raised exception".format(self._rank),
-                          flush=True)
+                    print(
+                        "rank {} win create raised exception".format(self._rank),
+                        flush=True,
+                    )
                 status = 1
-            self._checkabort(self._comm, status,
-                             "shared memory allocation")
+            self._checkabort(self._comm, status, "shared memory allocation")
 
             self._comm.barrier()
 
@@ -97,11 +100,11 @@ class MPILock(object):
 
     def _checkabort(self, comm, status, msg):
         from mpi4py import MPI
+
         failed = comm.allreduce(status, op=MPI.SUM)
         if failed > 0:
             if comm.rank == self._root:
-                print("MPIShared: one or more processes failed: {}".format(
-                    msg))
+                print("MPIShared: one or more processes failed: {}".format(msg))
             comm.Abort()
         return
 
@@ -118,39 +121,58 @@ class MPILock(object):
 
         if self._comm is not None:
             from mpi4py import MPI
+
             waiting = np.zeros((self._procs,), dtype=np.uint8)
             lock = np.zeros((1,), dtype=np.uint8)
             lock[0] = 1
 
             # lock the window
             if self._debug:
-                print("lock:  rank {}, instance {} locking shared window".format(
-                    self._rank, self._tag), flush=True)
+                print(
+                    "lock:  rank {}, instance {} locking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Lock(self._root, MPI.LOCK_EXCLUSIVE)
 
             # add ourselves to the list of waiting ranks
             if self._debug:
-                print("lock:  rank {}, instance {} putting rank".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR],
-                          self._root, target=self._rank)
+                print(
+                    "lock:  rank {}, instance {} putting rank".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR], self._root, target=self._rank)
 
             # get the full list of current processes waiting or running
             if self._debug:
-                print("lock:  rank {}, instance {} getting waitlist".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Get(
-                [waiting, self._procs, MPI.UNSIGNED_CHAR], self._root)
+                print(
+                    "lock:  rank {}, instance {} getting waitlist".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Get([waiting, self._procs, MPI.UNSIGNED_CHAR], self._root)
             if self._debug:
-                print("lock:  rank {}, instance {} list = {}".format(self._rank,
-                                                                     self._tag, waiting), flush=True)
+                print(
+                    "lock:  rank {}, instance {} list = {}".format(
+                        self._rank, self._tag, waiting
+                    ),
+                    flush=True,
+                )
 
             self._win.Flush(self._root)
 
             # unlock the window
             if self._debug:
-                print("lock:  rank {}, instance {} unlocking shared window".format(
-                    self._rank, self._tag), flush=True)
+                print(
+                    "lock:  rank {}, instance {} unlocking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Unlock(self._root)
 
             # Go through the list of waiting processes.  If any one is
@@ -160,12 +182,15 @@ class MPILock(object):
                 if (waiting[p] == 1) and (p != self._rank):
                     # we have to wait...
                     if self._debug:
-                        print("lock:  rank {} waiting for the lock".format(self._rank),
-                              flush=True)
+                        print(
+                            "lock:  rank {} waiting for the lock".format(self._rank),
+                            flush=True,
+                        )
                     self._comm.Recv(lock, source=MPI.ANY_SOURCE, tag=self._tag)
                     if self._debug:
-                        print("lock:  rank {} got the lock".format(self._rank),
-                              flush=True)
+                        print(
+                            "lock:  rank {} got the lock".format(self._rank), flush=True
+                        )
                     break
 
         # We have the lock now!
@@ -182,38 +207,57 @@ class MPILock(object):
 
         if self._comm is not None:
             from mpi4py import MPI
+
             waiting = np.zeros((self._procs,), dtype=np.uint8)
             lock = np.zeros((1,), dtype=np.uint8)
 
             # lock the window
             if self._debug:
-                print("unlock:  rank {}, instance {} locking shared window"
-                      .format(self._rank, self._tag), flush=True)
+                print(
+                    "unlock:  rank {}, instance {} locking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Lock(self._root, MPI.LOCK_EXCLUSIVE)
 
             # remove ourselves to the list of waiting ranks
             if self._debug:
-                print("unlock:  rank {}, instance {} putting rank".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR], self._root,
-                          target=self._rank)
+                print(
+                    "unlock:  rank {}, instance {} putting rank".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Put([lock, 1, MPI.UNSIGNED_CHAR], self._root, target=self._rank)
 
             # get the full list of current processes waiting or running
             if self._debug:
-                print("unlock:  rank {}, instance {} getting waitlist".format(
-                    self._rank, self._tag), flush=True)
-            self._win.Get([waiting, self._procs, MPI.UNSIGNED_CHAR],
-                          self._root)
+                print(
+                    "unlock:  rank {}, instance {} getting waitlist".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
+            self._win.Get([waiting, self._procs, MPI.UNSIGNED_CHAR], self._root)
             if self._debug:
-                print("unlock:  rank {}, instance {} list = {}"
-                      .format(self._rank, self._tag, waiting), flush=True)
+                print(
+                    "unlock:  rank {}, instance {} list = {}".format(
+                        self._rank, self._tag, waiting
+                    ),
+                    flush=True,
+                )
 
             self._win.Flush(self._root)
 
             # unlock the window
             if self._debug:
-                print("unlock:  rank {}, instance {} unlocking shared window"
-                      .format(self._rank, self._tag), flush=True)
+                print(
+                    "unlock:  rank {}, instance {} unlocking shared window".format(
+                        self._rank, self._tag
+                    ),
+                    flush=True,
+                )
             self._win.Unlock(self._root)
 
             # Go through the list of waiting processes.  Pass the lock
@@ -223,8 +267,12 @@ class MPILock(object):
                 nextrank = next % self._procs
                 if waiting[nextrank] == 1:
                     if self._debug:
-                        print("unlock:  rank {} passing lock to {}"
-                              .format(self._rank, nextrank), flush=True)
+                        print(
+                            "unlock:  rank {} passing lock to {}".format(
+                                self._rank, nextrank
+                            ),
+                            flush=True,
+                        )
                     self._comm.Send(lock, nextrank, tag=self._tag)
                     self._have_lock = False
                     break

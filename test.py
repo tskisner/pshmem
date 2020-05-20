@@ -1,5 +1,5 @@
 ##
-# Copyright (c) 2017-2019, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
@@ -85,9 +85,11 @@ def run_test_shmem(comm, datatype):
             for upd in range(nupdate):
                 if p == rank:
                     # My turn!  Write my process rank to the buffer slab.
-                    setdata = local[setoffset[0]:setoffset[0] + updatedims[0],
-                                    setoffset[1]:setoffset[1] + updatedims[1],
-                                    setoffset[2]:setoffset[2] + updatedims[2]]
+                    setdata = local[
+                        setoffset[0] : setoffset[0] + updatedims[0],
+                        setoffset[1] : setoffset[1] + updatedims[1],
+                        setoffset[2] : setoffset[2] + updatedims[2],
+                    ]
                 try:
                     # All processes call set(), but only data on rank p matters.
                     shm.set(setdata, setoffset, fromrank=p)
@@ -134,13 +136,63 @@ def run_test_shmem(comm, datatype):
         for p in range(procs):
             if p == rank:
                 slc = shm[1, 2]
-                print("proc {} slice has dims {}, dtype {}, C = {}".format(
-                    p, slc.shape, slc.dtype.str, slc.flags["C_CONTIGUOUS"]),
-                    flush=True)
+                print(
+                    "proc {} slice has dims {}, dtype {}, C = {}".format(
+                        p, slc.shape, slc.dtype.str, slc.flags["C_CONTIGUOUS"]
+                    ),
+                    flush=True,
+                )
             if comm is not None:
                 comm.barrier()
+    return
+
+
+def run_test_shmem_shape(comm):
+    """
+    Test handling of shape type errors
+    """
+    rank = 0
+    procs = 1
+    if comm is not None:
+        rank = comm.rank
+        procs = comm.size
+
+    good_dims = [
+        (2, 5, 10),
+        np.array([10, 2], dtype=np.int32),
+        np.array([5, 2], dtype=np.int64),
+        np.array([10, 2], dtype=np.int),
+    ]
+    bad_dims = [
+        (2, 5.5, 10),
+        np.array([10, 2], dtype=np.float32),
+        np.array([5, 2], dtype=np.float64),
+        np.array([10, 2.5], dtype=np.float32),
+    ]
+
+    dt = np.float64
+
+    for dims in good_dims:
+        try:
+            shm = MPIShared(dims, dt, comm)
+            if rank == 0:
+                print("successful creation with shape {}".format(dims), flush=True)
+            del shm
+        except ValueError:
+            if rank == 0:
+                print("unsuccessful creation with shape {}".format(dims), flush=True)
+    for dims in bad_dims:
+        try:
+            shm = MPIShared(dims, dt, comm)
+            if rank == 0:
+                print("unsuccessful rejection of shape {}".format(dims), flush=True)
+            del shm
+        except ValueError:
+            if rank == 0:
+                print("successful rejection of shape {}".format(dims), flush=True)
 
     return
+
 
 # Run all tests with COMM_WORLD
 
@@ -153,10 +205,12 @@ run_test_lock(comm, 2)
 
 # Run shared memory test with a few different datatypes
 
-run_test_shmem(comm, np.dtype(np.float64))
-run_test_shmem(comm, np.dtype(np.float32))
-run_test_shmem(comm, np.dtype(np.int64))
-run_test_shmem(comm, np.dtype(np.int32))
+run_test_shmem(comm, np.float64)
+run_test_shmem(comm, np.float32)
+run_test_shmem(comm, np.int64)
+run_test_shmem(comm, np.int32)
+
+run_test_shmem_shape(comm)
 
 # Run all tests with no communicator
 
@@ -168,7 +222,9 @@ run_test_lock(comm, 2)
 
 # Run shared memory test with a few different datatypes
 
-run_test_shmem(comm, np.dtype(np.float64))
-run_test_shmem(comm, np.dtype(np.float32))
-run_test_shmem(comm, np.dtype(np.int64))
-run_test_shmem(comm, np.dtype(np.int32))
+run_test_shmem(comm, np.float64)
+run_test_shmem(comm, np.float32)
+run_test_shmem(comm, np.int64)
+run_test_shmem(comm, np.int32)
+
+run_test_shmem_shape(comm)
