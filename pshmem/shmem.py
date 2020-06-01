@@ -7,6 +7,8 @@
 import sys
 import numpy as np
 
+from .utils import mpi_check_abort, mpi_data_type
+
 
 class MPIShared(object):
     """
@@ -68,7 +70,7 @@ class MPIShared(object):
         self._nodes = 1
         self._mynode = 0
         if self._comm is not None:
-            import mpi4py.MPI as MPI
+            from mpi4py import MPI
 
             self._nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
             self._noderank = self._nodecomm.rank
@@ -113,39 +115,21 @@ class MPIShared(object):
             self._localoffset = 0
             self._nlocal = 0
 
+        # Compute the data sizes
+        self._dsize, self._mpitype = mpi_data_type(self._comm, self._dtype)
+
         # Allocate the shared memory buffer and wrap it in a
         # numpy array.  If the communicator is None, just make
         # a normal numpy array.
 
-        self._mpitype = None
         self._win = None
-
         self._buffer = None
         self._dbuf = None
         self._flat = None
         self._data = None
 
-        if self._comm is None:
-            dsize = self._dtype.itemsize
-        else:
-            import mpi4py.MPI as MPI
-
-            # We are actually using MPI, so we need to ensure that
-            # our specified numpy dtype has a corresponding MPI datatype.
-            status = 0
-            try:
-                # Technically this is an internal variable, but online
-                # forum posts from the developers indicate this is stable
-                # at least until a public interface is created.
-                self._mpitype = MPI._typedict[self._dtype.char]
-            except:
-                status = 1
-            self._checkabort(self._comm, status, "numpy to MPI type conversion")
-
-            dsize = self._mpitype.Get_size()
-
         # Number of bytes in our buffer
-        nbytes = self._nlocal * dsize
+        nbytes = self._nlocal * self._dsize
 
         self._win = None
         self._buffer = None
@@ -158,10 +142,15 @@ class MPIShared(object):
             # process pieces are guaranteed to be contiguous.
             status = 0
             try:
-                self._win = MPI.Win.Allocate_shared(nbytes, dsize, comm=self._nodecomm)
+                self._win = MPI.Win.Allocate_shared(
+                    nbytes,
+                    disp_unit=self._dsize,
+                    info=MPI.INFO_NULL,
+                    comm=self._nodecomm,
+                )
             except:
                 status = 1
-            self._checkabort(self._nodecomm, status, "shared memory allocation")
+            mpi_check_abort(self._nodecomm, 0, status, "shared memory allocation")
 
             # Every process looks up the memory address of rank zero's piece,
             # which is the start of the contiguous shared buffer.
@@ -170,7 +159,7 @@ class MPIShared(object):
                 self._buffer, dsize = self._win.Shared_query(0)
             except:
                 status = 1
-            self._checkabort(self._nodecomm, status, "shared memory query")
+            mpi_check_abort(self._nodecomm, 0, status, "shared memory query")
 
         # Create a numpy array which acts as a "view" of the buffer.
         self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
@@ -246,17 +235,6 @@ class MPIShared(object):
             dist.append((first, myn))
         return dist
 
-    def _checkabort(self, comm, status, msg):
-        import mpi4py.MPI as MPI
-
-        failed = comm.allreduce(status, op=MPI.SUM)
-        if failed > 0:
-            if comm.rank == 0:
-                print("MPIShared: one or more processes failed: {}".format(msg))
-                sys.stdout.flush()
-            comm.Abort()
-        return
-
     def set(self, data, offset, fromrank=0):
         """
         Set the values of a slice of the shared array.
@@ -296,8 +274,7 @@ class MPIShared(object):
                         "buffer ({})".format(len(data.shape), len(self._shape))
                     )
                 if self._comm is not None:
-                    print(msg)
-                    sys.stdout.flush()
+                    print(msg, flush=True)
                     self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
@@ -307,8 +284,7 @@ class MPIShared(object):
                     "buffer ({})".format(len(offset), len(self._shape))
                 )
                 if self._comm is not None:
-                    print(msg)
-                    sys.stdout.flush()
+                    print(msg, flush=True)
                     self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
@@ -320,8 +296,7 @@ class MPIShared(object):
                     )
                 )
                 if self._comm is not None:
-                    print(msg)
-                    sys.stdout.flush()
+                    print(msg, flush=True)
                     self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
@@ -342,7 +317,8 @@ class MPIShared(object):
                 if self._rank == 0:
                     print(
                         "set() called with data from a node rank which does"
-                        " not exist on all nodes"
+                        " not exist on all nodes",
+                        flush=True,
                     )
                     self._comm.Abort()
 
