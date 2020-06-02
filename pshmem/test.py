@@ -188,7 +188,7 @@ class LockTest(unittest.TestCase):
         if self.comm is not None:
             self.rank = self.comm.rank
             self.procs = self.comm.size
-        self.sleepsec = 1
+        self.sleepsec = 0.2
 
     def tearDown(self):
         pass

@@ -257,7 +257,9 @@ class MPILock(object):
             # hold the lock, the wait numbers should only be increasing from here.
             # The only time these numbers reset to zero is when no process holds the
             # lock.
-            invalid_indx = np.where(self._waiting < my_wait_val)[0]
+            invalid_indx = np.where(
+                np.logical_and(self._waiting < my_wait_val, self._waiting > 0)
+            )[0]
             if len(invalid_indx) > 0:
                 print(
                     "rank {} has lock (wait number {}) and found ranks with lower wait numbers: {}".format(
