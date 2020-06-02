@@ -9,9 +9,10 @@ topdir=$(pwd)
 popd >/dev/null 2>&1
 
 # Install mpich
-apt-get -y update
-apt-get install -y build-essential libmpich-dev
+sudo apt-get -y update
+sudo apt-get install -y build-essential libmpich-dev
 
 # Install mpi4py
+pip3 install setuptools
 pip3 install numpy
 pip3 install mpi4py
