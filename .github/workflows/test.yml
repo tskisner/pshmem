@@ -22,7 +22,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install Dependencies
-      run: ./test_scripts/install_deps_ubuntu.sh
+      run: sudo ./test_scripts/install_deps_ubuntu.sh
     - name: Install Package
       run: pip3 install .
     - name: Run Tests
