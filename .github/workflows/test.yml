@@ -9,33 +9,20 @@ on:
     branches: [ master ]
 
 jobs:
-  py36:
-    name: Python 3.6
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Pull Python Image
-        run: docker pull python:3.6-slim-buster
-      - name: Install and Test
-        run: docker run -v "$(pwd)":/home/pshmem --name="test_py36" python:3.6-slim-buster /home/pshmem/test_scripts/install_deps_ubuntu.sh && pip3 install /home/pshmem && python3 -c 'import pshmem; pshmem.test()'
-  py37:
-    name: Python 3.7
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Pull Python Image
-        run: docker pull python:3.7-slim-buster
-      - name: Install and Test
-        run: docker run -v "$(pwd)":/home/pshmem --name="test_py37" python:3.7-slim-buster /home/pshmem/test_scripts/install_deps_ubuntu.sh && pip3 install /home/pshmem && python3 -c 'import pshmem; pshmem.test()'
-  py38:
-    name: Python 3.8
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Pull Python Image
-        run: docker pull python:3.8-slim-buster
-      - name: Install and Test
-        run: docker run -v "$(pwd)":/home/pshmem --name="test_py38" python:3.8-slim-buster /home/pshmem/test_scripts/install_deps_ubuntu.sh && pip3 install /home/pshmem && python3 -c 'import pshmem; pshmem.test()'
+  runs-on: ubuntu-latest
+  strategy:
+    matrix:
+      python-version: [3.6, 3.7, 3.8]
+  steps:
+  - name: Checkout
+    uses: actions/checkout@v2
+  - name: Set up Python ${{ matrix.python-version }}
+    uses: actions/setup-python@v2
+    with:
+      python-version: ${{ matrix.python-version }}
+  - name: Install Dependencies
+    run: ./test_scripts/install_deps_ubuntu.sh
+  - name: Install Package
+    run: pip3 install .
+  - name: Run Tests
+    run: python3 -c 'import pshmem; pshmem.test()'

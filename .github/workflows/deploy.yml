@@ -32,7 +32,7 @@ jobs:
       CIBW_BEFORE_BUILD_LINUX: ./test_scripts/install_deps_centos.sh
       CIBW_BEFORE_BUILD_MACOS: ./test_scripts/install_deps_macos.sh
       CIBW_BEFORE_TEST: echo "" >/dev/null
-      CIBW_TEST_COMMAND: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
+      CIBW_TEST_COMMAND: mpiexec -n 2 python -c 'import pshmem; pshmem.test()'
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-python@v2
