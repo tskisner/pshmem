@@ -194,14 +194,15 @@ class LockTest(unittest.TestCase):
         pass
 
     def test_lock(self):
-        lock = MPILock(self.comm, root=0, debug=True)
-
-        msg = "test_lock:  process {} got the lock".format(self.rank)
-
-        lock.lock()
-        print(msg, flush=True)
-        time.sleep(self.sleepsec)
-        lock.unlock()
+        with MPILock(self.comm, root=0, debug=True) as lock:
+            for lk in range(5):
+                msg = "test_lock:  process {} got lock {}".format(
+                    self.rank, lk
+                )
+                lock.lock()
+                print(msg, flush=True)
+                #time.sleep(self.sleepsec)
+                lock.unlock()
         if self.comm is not None:
             self.comm.barrier()
 

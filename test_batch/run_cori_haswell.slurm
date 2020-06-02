@@ -26,7 +26,7 @@ export OMP_PROC_BIND=spread
 export OMP_PLACES=threads
 
 com="srun -n ${NPROC} -N ${NODES} -c ${PROC_DEPTH} --cpu_bind=cores \
-python3 'import pshmem; pshmem.test()'"
+python3 -c 'import pshmem; pshmem.test()'"
 
 echo ${com}
 eval ${com}
