@@ -1,2 +1,3 @@
 include versioneer.py
 include pshmem/_version.py
+include test_scripts
