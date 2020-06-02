@@ -126,7 +126,7 @@ class MPIShared(object):
         self._buffer = None
         self._dbuf = None
         self._flat = None
-        self._data = None
+        self.data = None
 
         # Number of bytes in our buffer
         nbytes = self._nlocal * self._dsize
@@ -164,7 +164,7 @@ class MPIShared(object):
         # Create a numpy array which acts as a "view" of the buffer.
         self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
         self._flat = self._dbuf.view(self._dtype)
-        self._data = self._flat.reshape(self._shape)
+        self.data = self._flat.reshape(self._shape)
 
         # Initialize to zero.  Any of the processes could do this to the
         # whole buffer, but it is safe and easy for each process to just
@@ -363,7 +363,7 @@ class MPIShared(object):
                 self._win.Lock(self._noderank, MPI.LOCK_EXCLUSIVE)
 
                 # Copy data slice
-                self._data[slc] = nodedata
+                self.data[slc] = nodedata
 
                 # Release the write-lock
                 self._win.Unlock(self._noderank)
@@ -376,7 +376,7 @@ class MPIShared(object):
                 dslice.append(slice(offset[d], offset[d] + data.shape[d], 1))
             slc = tuple(dslice)
 
-            self._data[slc] = data
+            self.data[slc] = data
 
         # Explicit barrier here, to ensure that other processes do not try
         # reading data before the writing processes have finished.
@@ -386,7 +386,7 @@ class MPIShared(object):
         return
 
     def __getitem__(self, key):
-        return self._data[key]
+        return self.data[key]
 
     def __setitem__(self, key, value):
         raise NotImplementedError(
