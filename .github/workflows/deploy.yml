@@ -45,7 +45,7 @@ jobs:
         python -m pip install twine cibuildwheel==1.4.2
     - name: Build wheel
       run: |
-        python -m cibuildwheel --output-dir wheelhouse
+        mkdir -p wheelhouse && python -m cibuildwheel --output-dir wheelhouse
     - uses: actions/upload-artifact@v2
       with:
         name: wheels
