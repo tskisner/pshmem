@@ -7,7 +7,7 @@ name:  Deploy Release
 #     tags:
 #       - '*'
 
-This is for debugging.
+# This is for debugging.
 on:
   push:
     branches: [ master ]
