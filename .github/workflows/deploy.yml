@@ -2,20 +2,21 @@
 
 name:  Deploy Release
 
-# on:
-#   push:
-#     tags:
-#       - '*'
-
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    tags:
+      - '*'
 
-# env:
-#   TWINE_USERNAME: __token__
-#   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+# This is for debugging.
+# on:
+#   push:
+#     branches: [ master ]
+#   pull_request:
+#     branches: [ master ]
+
+env:
+  TWINE_USERNAME: __token__
+  TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
 
 jobs:
   wheels:
@@ -46,11 +47,11 @@ jobs:
     - name: Build wheel
       run: |
         mkdir -p wheelhouse && python -m cibuildwheel --output-dir wheelhouse
-    - uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: ./wheelhouse
+    - name: Upload to PyPI
+      run: |
+        python -m twine upload wheelhouse/pshmem*.whl
 
-# - name: Upload to PyPI
-#   run: |
-#     python -m twine upload wheelhouse/pshmem*.whl
+    # - uses: actions/upload-artifact@v2
+    #   with:
+    #     name: wheels
+    #     path: ./wheelhouse
