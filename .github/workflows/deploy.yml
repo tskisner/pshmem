@@ -46,10 +46,10 @@ jobs:
         python -m pip install twine cibuildwheel==1.4.2
     - name: Build wheel
       run: |
-        mkdir -p wheelhouse && python -m cibuildwheel --output-dir wheelhouse
+        python -m cibuildwheel --output-dir wheelhouse
     - name: Upload to PyPI
       run: |
-        python -m twine upload wheelhouse/pshmem*.whl
+        python -m twine upload wheelhouse/*.whl
 
     # - uses: actions/upload-artifact@v2
     #   with:
