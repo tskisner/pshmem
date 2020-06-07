@@ -2,17 +2,17 @@
 
 name:  Deploy Release
 
-# on:
-#   push:
-#     tags:
-#       - '*'
-
-# This is for debugging.
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    tags:
+      - '*'
+
+# This is for debugging.
+# on:
+#   push:
+#     branches: [ master ]
+#   pull_request:
+#     branches: [ master ]
 
 env:
   TWINE_USERNAME: __token__
