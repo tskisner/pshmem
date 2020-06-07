@@ -2,17 +2,17 @@
 
 name:  Deploy Release
 
-on:
-  push:
-    tags:
-      - '*'
-
-# This is for debugging.
 # on:
 #   push:
-#     branches: [ master ]
-#   pull_request:
-#     branches: [ master ]
+#     tags:
+#       - '*'
+
+This is for debugging.
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 env:
   TWINE_USERNAME: __token__
@@ -20,38 +20,63 @@ env:
 
 jobs:
   wheels:
-    name: Python wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    env:
-      CIBW_BUILD: cp36-macosx_x86_64 cp36-manylinux_x86_64 cp37-macosx_x86_64 cp37-manylinux_x86_64 cp38-macosx_x86_64 cp38-manylinux_x86_64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-      CIBW_MANYLINUX_I686_IMAGE: manylinux2014
-      CIBW_BUILD_VERBOSITY: 3
-      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH}"
-      CIBW_BEFORE_BUILD_LINUX: ./test_scripts/install_deps_cibuildwheel_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./test_scripts/install_deps_cibuildwheel_macos.sh
-      CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
-      CIBW_TEST_COMMAND: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      name: Install Python
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
-    - name: Install cibuildwheel
-      run: |
-        python -m pip install twine cibuildwheel==1.4.2
-    - name: Build wheel
-      run: |
-        python -m cibuildwheel --output-dir wheelhouse && echo "PWD = $(pwd)" && echo "ls = $(ls)"
+        python-version: 3.7
+    - name: Install Dependencies
+      run: ./test_scripts/install_deps_github_ubuntu.sh
+    - name: Install Package
+      run: pip install .
+    - name: Run Tests
+      run: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
+    - name: Build source package
+      run: rm -rf dist && python setup.py sdist
+    - name: Build wheels
+      run: mkdir -p wheelhouse && pip wheel -w wheelhouse .
     - name: Upload to PyPI
       run: |
-        echo "PWD = $(pwd)" && echo "ls = $(ls *)" && python -m twine upload wheelhouse/*.whl
+        python -m twine upload dist/*.tar.gz && python -m twine upload wheelhouse/*.whl
 
-    # - uses: actions/upload-artifact@v2
-    #   with:
-    #     name: wheels
-    #     path: ./wheelhouse
+
+# jobs:
+#   wheels:
+#     name: Python wheels on ${{ matrix.os }}
+#     runs-on: ${{ matrix.os }}
+#     strategy:
+#       matrix:
+#         os: [ubuntu-latest, macos-latest]
+#     env:
+#       CIBW_BUILD: cp36-macosx_x86_64 cp36-manylinux_x86_64 cp37-macosx_x86_64 cp37-manylinux_x86_64 cp38-macosx_x86_64 cp38-manylinux_x86_64
+#       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+#       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
+#       CIBW_BUILD_VERBOSITY: 3
+#       CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH}"
+#       CIBW_BEFORE_BUILD_LINUX: ./test_scripts/install_deps_cibuildwheel_linux.sh
+#       CIBW_BEFORE_BUILD_MACOS: ./test_scripts/install_deps_cibuildwheel_macos.sh
+#       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
+#       CIBW_TEST_COMMAND: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
+#     steps:
+#     - uses: actions/checkout@v2
+#     - uses: actions/setup-python@v2
+#       name: Install Python
+#       with:
+#         python-version: '3.7'
+#     - name: Install cibuildwheel
+#       run: |
+#         python -m pip install twine cibuildwheel==1.4.2
+#     - name: Build wheel
+#       run: |
+#         python -m cibuildwheel --output-dir wheelhouse
+#     - name: Upload to PyPI
+#       run: |
+#         python -m twine upload wheelhouse/*.whl
+
+# - uses: actions/upload-artifact@v2
+#   with:
+#     name: wheels
+#     path: ./wheelhouse
