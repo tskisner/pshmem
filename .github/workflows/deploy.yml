@@ -29,7 +29,8 @@ jobs:
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
       CIBW_BUILD_VERBOSITY: 3
-      CIBW_BEFORE_BUILD_LINUX: ./test_scripts/install_deps_cibuildwheel_linux.sh && export PATH=/usr/lib64/mpich-3.2/bin:${PATH}
+      CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH}"
+      CIBW_BEFORE_BUILD_LINUX: ./test_scripts/install_deps_cibuildwheel_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./test_scripts/install_deps_cibuildwheel_macos.sh
       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
       CIBW_TEST_COMMAND: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
