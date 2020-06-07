@@ -8,12 +8,8 @@ pushd $(dirname $0) >/dev/null 2>&1
 topdir=$(pwd)
 popd >/dev/null 2>&1
 
-echo "Before brew mpich:  python = $(which python3), pip = $(which pip3)"
-
 # Install mpich
 brew install mpich
-
-echo "After brew mpich:  python = $(which python3), pip = $(which pip3)"
 
 # Install mpi4py
 pip3 install setuptools

@@ -11,13 +11,3 @@ popd >/dev/null 2>&1
 # Install mpich
 yum -y update
 yum -y install mpich-3.2-devel.x86_64 mpich-3.2-autoload.x86_64
-
-# Load MPI compiler
-source /etc/profile.d/modules.sh
-source /etc/profile.d/mpich-3.2-x86_64.sh
-
-# Install mpi4py
-# pip3 install setuptools
-# pip3 install wheel
-# pip3 install numpy
-# pip3 install mpi4py
