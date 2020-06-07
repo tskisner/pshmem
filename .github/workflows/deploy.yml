@@ -18,7 +18,7 @@ on:
 #   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
 
 jobs:
-  py36:
+  wheels:
     name: Python wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
