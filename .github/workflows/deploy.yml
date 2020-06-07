@@ -19,13 +19,13 @@ on:
 
 jobs:
   py36:
-    name: Python 3.6 wheels on ${{ matrix.os }}
+    name: Python wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
     env:
-      CIBW_BUILD: cp36-macosx_x86_64 cp36-manylinux_x86_64
+      CIBW_BUILD: cp36-macosx_x86_64 cp36-manylinux_x86_64 cp37-macosx_x86_64 cp37-manylinux_x86_64 cp38-macosx_x86_64 cp38-manylinux_x86_64
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
       CIBW_BUILD_VERBOSITY: 3
@@ -51,7 +51,6 @@ jobs:
         name: wheels
         path: ./wheelhouse
 
-
 # - name: Upload to PyPI
 #   run: |
-#     python -m twine upload wheelhouse/toast*.whl
+#     python -m twine upload wheelhouse/pshmem*.whl
