@@ -43,19 +43,19 @@ from pshmem import MPIShared
 
 comm = MPI.COMM_WORLD
 
-with MPIShared((3, 5), np.float64, comm=comm) as shm:
-    # A copy of the data now exists on every node and is initialized to zero.
-    # There is a numpy array "view" of that memory:
+with MPIShared((3, 5), np.float64, comm) as shm:
+    # A copy of the data exists on every node and is initialized to zero.
+    # There is a numpy array "view" of that memory available with slice notation
+    # or by accessing the "data" member:
     if comm.rank == 0:
-        print("===== Initialized Data =====", flush=True)
+        # You can get a summary of the data by printing it:
+        print("String representation:\n")
+        print(shm)
+        print("\n===== Initialized Data =====")
     for p in range(comm.size):
         if p == comm.rank:
             print("rank {}:\n".format(p), shm.data, flush=True)
         comm.barrier()
-
-    # You can read from the node-local copy of the data from all processes,
-    # using either the "data" member or elementwise access:
-    #   print(shm[0, 2])
 
     # NEVER write to the data directly!  You must use the set() method on one process
     set_data = None
@@ -65,21 +65,38 @@ with MPIShared((3, 5), np.float64, comm=comm) as shm:
         set_offset = (1, 1)
 
     # The set() method is collective, but the inputs only matter on one rank
-    shm.set(set_data, set_offset, fromrank=0)
+    shm.set(set_data, offset=set_offset, fromrank=0)
 
     # This updated data has now been replicated to the shared memory on all nodes.
     if comm.rank == 0:
-        print("======= Updated Data =======", flush=True)
+        print("======= Updated Data =======")
     for p in range(comm.size):
         if p == comm.rank:
             print("rank {}:\n".format(p), shm.data, flush=True)
         comm.barrier()
+
+    # You can read from the node-local copy of the data from all processes,
+    # using either the "data" member or slice access:
+    if comm.rank == comm.size - 1:
+        print("==== Read-only access ======")
+        print("rank {}: shm[2, 3] = {}".format(comm.rank, shm[2, 3]), flush=True)
+        print("rank {}: shm.data = \n{}".format(comm.rank, shm.data), flush=True)
+
 ```
 
 Putting the above code into a file `test.py` and running this on 4 processes gives:
 
 ```
 mpirun -np 4 python3 test.py
+
+String representation:
+
+<MPIShared
+  replicated on 1 nodes, each with 4 processes (4 total)
+  shape = (3, 5), dtype = float64
+  [ [0. 0. 0. 0. 0.] [0. 0. 0. 0. 0.] [0. 0. 0. 0. 0.] ]
+>
+
 ===== Initialized Data =====
 rank 0:
  [[0. 0. 0. 0. 0.]
@@ -114,6 +131,12 @@ rank 3:
  [[0. 0. 0. 0. 0.]
  [0. 0. 1. 2. 0.]
  [0. 3. 4. 5. 0.]]
+==== Read-only access ======
+rank 3: shm[2, 3] = 5.0
+rank 3: shm.data =
+[[0. 0. 0. 0. 0.]
+ [0. 0. 1. 2. 0.]
+ [0. 3. 4. 5. 0.]]
  ```
 
 Note that if you are not using a context manager, then you should be careful to close
@@ -145,7 +168,7 @@ communicator, so it is possible to split the world communicator into groups and 
 some operation serialized just within that group:
 
 ```python
-with MPILock(MPI.COMM_WORLD, root=0) as mpilock:
+with MPILock(MPI.COMM_WORLD) as mpilock:
     mpilock.lock()
     # Do something here.  Only one process at a time will do this.
     mpilock.unlock()

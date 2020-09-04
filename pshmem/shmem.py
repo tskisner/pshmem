@@ -28,11 +28,13 @@ class MPIShared(object):
     local copy of the buffer, simply by using the standard array indexing
     notation ("[]") on the object itself.
 
+    If comm is None, a simple local numpy array is used.
+
     Args:
         shape (tuple): the dimensions of the array.
         dtype (np.dtype): the data type of the array.
         comm (MPI.Comm): the full communicator to use.  This may span
-            multiple nodes, and each node will have a copy.
+            multiple nodes, and each node will have a copy of the data.
     """
 
     def __init__(self, shape, dtype, comm):
