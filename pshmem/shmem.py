@@ -186,6 +186,40 @@ class MPIShared(object):
         self.close()
         return False
 
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError(
+            "Setting individual array elements not"
+            " supported.  Use the set() method instead."
+        )
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __repr__(self):
+        val = "<MPIShared"
+        val += "\n  replicated on {} nodes, each with {} processes ({} total)".format(
+            self._nodes, self._nodeprocs, self._procs
+        )
+        val += "\n  shape = {}, dtype = {}".format(self._shape, self._dtype)
+
+        if self._shape[0] <= 4:
+            val += "\n  [ "
+            for i in range(self._shape[0]):
+                val += "{} ".format(self.data[i])
+            val += "]"
+        else:
+            val += "\n  [ {} {} ... {} {} ]".format(
+                self.data[0], self.data[1], self.data[-2], self.data[-1]
+            )
+        val += "\n>"
+        return val
+
     def close(self):
         # Explicitly free the shared memory window.
         if hasattr(self, "_win") and (self._win is not None):
@@ -235,7 +269,7 @@ class MPIShared(object):
             dist.append((first, myn))
         return dist
 
-    def set(self, data, offset, fromrank=0):
+    def set(self, data, offset=None, fromrank=0):
         """
         Set the values of a slice of the shared array.
 
@@ -278,6 +312,8 @@ class MPIShared(object):
                     self._comm.Abort()
                 else:
                     raise RuntimeError(msg)
+            if offset is None:
+                offset = tuple([0 for x in self._shape])
             if len(offset) != len(self._shape):
                 msg = (
                     "input offset dimensions {} incompatible with "
@@ -384,12 +420,3 @@ class MPIShared(object):
             self._comm.barrier()
 
         return
-
-    def __getitem__(self, key):
-        return self.data[key]
-
-    def __setitem__(self, key, value):
-        raise NotImplementedError(
-            "Setting individual array elements not"
-            " supported.  Use the set() method instead."
-        )
