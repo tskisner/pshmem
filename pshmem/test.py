@@ -19,7 +19,7 @@ from .locking import MPILock
 MPI = None
 use_mpi = True
 
-if "PSHMEM_MPI_DISABLE" in os.environ:
+if "MPI_DISABLE" in os.environ:
     use_mpi = False
 
 if use_mpi and (MPI is None):

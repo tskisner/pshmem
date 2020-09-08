@@ -19,4 +19,3 @@ del get_versions
 
 from .shmem import MPIShared
 from .locking import MPILock
-from .test import run as test

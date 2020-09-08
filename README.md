@@ -178,9 +178,9 @@ with MPILock(MPI.COMM_WORLD) as mpilock:
 
 After installation, you can run some tests with:
 
-    mpirun -np 4 python3 'import pshmem; pshmem.test()'
+    mpirun -np 4 python3 'import pshmem.test; pshmem.test.run()'
 
 If you have mpi4py available but would like to explicitly disable the use of MPI in the
 tests, you can set an environment variable:
 
-    PSHMEM_MPI_DISABLE=1 python3 -c 'import pshmem; pshmem.test()'
+    MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
