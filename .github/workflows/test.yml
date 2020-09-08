@@ -26,7 +26,7 @@ jobs:
     - name: Install Package
       run: pip3 install .
     - name: Run Tests
-      run: mpirun -np 2 python3 -c 'import pshmem; pshmem.test()'
+      run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
   macos:
     runs-on: macos-latest
     strategy:
@@ -44,4 +44,4 @@ jobs:
     - name: Install Package
       run: pip3 install .
     - name: Run Tests
-      run: mpirun -np 2 python3 -c 'import pshmem; pshmem.test()'
+      run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'

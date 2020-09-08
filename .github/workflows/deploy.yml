@@ -33,7 +33,7 @@ jobs:
     - name: Install Package
       run: pip install .
     - name: Run Tests
-      run: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
+      run: mpirun -np 2 python -c 'import pshmem.test; pshmem.test.run()'
     - name: Build source package
       run: rm -rf dist && python setup.py sdist
     - name: Build wheels
