@@ -7,6 +7,7 @@
 import os
 import sys
 import time
+import traceback
 
 import unittest
 
@@ -88,13 +89,49 @@ class ShmemTest(unittest.TestCase):
                             shm.set(setdata, setoffset, fromrank=p)
                         except:
                             print(
-                                "proc {} threw exception during set()".format(rank),
+                                "proc {} threw exception during set()".format(
+                                    self.rank
+                                ),
                                 flush=True,
                             )
                             if self.comm is not None:
                                 self.comm.Abort()
                             else:
                                 sys.exit(1)
+
+                        try:
+                            # Same as set(), but using __setitem__ with an
+                            # allreduce to find which process is setting.
+                            # key as a tuple of offsets
+                            shm[setoffset] = setdata
+                            # key as a tuple slices
+                            if setdata is None:
+                                shm[None] = setdata
+                            else:
+                                shm[
+                                    setoffset[0] : setoffset[0] + setdata.shape[0],
+                                    setoffset[1] : setoffset[1] + setdata.shape[1],
+                                    setoffset[2] : setoffset[2] + setdata.shape[2],
+                                ] = setdata
+                        except:
+                            print(
+                                "proc {} threw exception during __setitem__".format(
+                                    self.rank
+                                ),
+                                flush=True,
+                            )
+                            if self.comm is not None:
+                                exc_type, exc_value, exc_traceback = sys.exc_info()
+                                lines = traceback.format_exception(
+                                    exc_type, exc_value, exc_traceback
+                                )
+                                lines = [
+                                    "Proc {}: {}".format(self.rank, x) for x in lines
+                                ]
+                                print("".join(lines), flush=True)
+                                self.comm.Abort()
+                            else:
+                                raise
 
                         # Increment the write offset within the array
 
@@ -207,7 +244,7 @@ class LockTest(unittest.TestCase):
 
 def run():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(LockTest))
+    # suite.addTest(unittest.makeSuite(LockTest))
     suite.addTest(unittest.makeSuite(ShmemTest))
     runner = unittest.TextTestRunner()
     runner.run(suite)

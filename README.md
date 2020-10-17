@@ -57,7 +57,6 @@ with MPIShared((3, 5), np.float64, comm) as shm:
             print("rank {}:\n".format(p), shm.data, flush=True)
         comm.barrier()
 
-    # NEVER write to the data directly!  You must use the set() method on one process
     set_data = None
     set_offset = None
     if comm.rank == 0:
@@ -66,6 +65,11 @@ with MPIShared((3, 5), np.float64, comm) as shm:
 
     # The set() method is collective, but the inputs only matter on one rank
     shm.set(set_data, offset=set_offset, fromrank=0)
+
+    # You can also use the usual '[]' notation.  However, this call must do an
+    # additional pre-communication to detect which process the data is coming from.
+    # And this line is still collective and must be called on all processes:
+    shm[set_offset] = set_data
 
     # This updated data has now been replicated to the shared memory on all nodes.
     if comm.rank == 0:

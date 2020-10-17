@@ -5,6 +5,7 @@
 ##
 
 import sys
+
 import numpy as np
 
 from .utils import mpi_check_abort, mpi_data_type
@@ -46,7 +47,8 @@ class MPIShared(object):
         self._n = 1
         for d in shape:
             if not isinstance(d, (int, np.integer)):
-                raise ValueError("input shape contains non-integer values")
+                msg = "input shape contains non-integer values"
+                raise ValueError(msg)
             self._n *= d
 
         self._shape = tuple(shape)
@@ -195,10 +197,48 @@ class MPIShared(object):
         return self.data[key]
 
     def __setitem__(self, key, value):
-        raise NotImplementedError(
-            "Setting individual array elements not"
-            " supported.  Use the set() method instead."
-        )
+        if self._comm is None:
+            # shortcut for the serial case
+            self.data[key] = value
+            return
+        # WARNING: Using this function will have a performance penalty over using
+        # the explicit 'set()' method, since this function must first communicate to
+        # find which process has the input data.
+        import mpi4py.MPI as MPI
+
+        check_rank = np.zeros((self._procs,), dtype=np.int32)
+        check_result = np.zeros((self._procs,), dtype=np.int32)
+        if value is not None:
+            check_rank[self._rank] = 1
+        self._comm.Allreduce(check_rank, check_result, op=MPI.SUM)
+        tot = np.sum(check_result)
+        if tot > 1:
+            if self._rank == 0:
+                msg = "When setting data with [] notation, only one process may have a non-None value for the data"
+                print(msg, flush=True)
+                self._comm.Abort()
+        from_rank = np.where(check_result == 1)[0][0]
+
+        # compute the offset from the slice keys
+        offset = None
+        if self._rank == from_rank:
+            offset = list()
+            if isinstance(key, slice):
+                # Just one dimension
+                offset.append(key.start)
+            else:
+                # Is it iterable?
+                try:
+                    for k in key:
+                        if isinstance(k, slice):
+                            offset.append(k.start)
+                        else:
+                            # Must be an index
+                            offset.append(k)
+                except TypeError:
+                    # No- must be an index
+                    offset.append(k)
+        self.set(value, offset=offset, fromrank=from_rank)
 
     def __iter__(self):
         return iter(self.data)
