@@ -106,7 +106,7 @@ class ShmemTest(unittest.TestCase):
                             shm[setoffset] = setdata
                             # key as a tuple slices
                             if setdata is None:
-                                shm[setoffset] = setdata
+                                shm[None] = setdata
                             else:
                                 shm[
                                     setoffset[0] : setoffset[0] + setdata.shape[0],

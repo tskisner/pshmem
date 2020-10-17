@@ -220,22 +220,24 @@ class MPIShared(object):
         from_rank = np.where(check_result == 1)[0][0]
 
         # compute the offset from the slice keys
-        offset = []
-        if isinstance(key, slice):
-            # Just one dimension
-            offset.append(key.start)
-        else:
-            # Is it iterable?
-            try:
-                for k in key:
-                    if isinstance(k, slice):
-                        offset.append(k.start)
-                    else:
-                        # Must be an index
-                        offset.append(k)
-            except TypeError:
-                # No- must be an index
-                offset.append(k)
+        offset = None
+        if self._rank == from_rank:
+            offset = list()
+            if isinstance(key, slice):
+                # Just one dimension
+                offset.append(key.start)
+            else:
+                # Is it iterable?
+                try:
+                    for k in key:
+                        if isinstance(k, slice):
+                            offset.append(k.start)
+                        else:
+                            # Must be an index
+                            offset.append(k)
+                except TypeError:
+                    # No- must be an index
+                    offset.append(k)
         self.set(value, offset=offset, fromrank=from_rank)
 
     def __iter__(self):
