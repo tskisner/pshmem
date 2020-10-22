@@ -225,19 +225,31 @@ class MPIShared(object):
             offset = list()
             if isinstance(key, slice):
                 # Just one dimension
-                offset.append(key.start)
+                if key.start is None:
+                    offset.append(0)
+                else:
+                    offset.append(key.start)
             else:
                 # Is it iterable?
                 try:
                     for k in key:
                         if isinstance(k, slice):
-                            offset.append(k.start)
+                            if k.start is None:
+                                offset.append(0)
+                            else:
+                                offset.append(k.start)
                         else:
                             # Must be an index
+                            if not isinstance(k, (int, np.integer)):
+                                msg = "[] key elements must be a slice or integer"
+                                raise ValueError(msg)
                             offset.append(k)
                 except TypeError:
                     # No- must be an index
-                    offset.append(k)
+                    if not isinstance(key, (int, np.integer)):
+                        msg = "[] key must be scalar or tuple of slices or integers"
+                        raise ValueError(msg)
+                    offset.append(key)
         self.set(value, offset=offset, fromrank=from_rank)
 
     def __iter__(self):

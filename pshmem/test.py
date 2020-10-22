@@ -102,8 +102,10 @@ class ShmemTest(unittest.TestCase):
                         try:
                             # Same as set(), but using __setitem__ with an
                             # allreduce to find which process is setting.
+                            #
                             # key as a tuple of offsets
                             shm[setoffset] = setdata
+
                             # key as a tuple slices
                             if setdata is None:
                                 shm[None] = setdata
@@ -158,6 +160,16 @@ class ShmemTest(unittest.TestCase):
                     truth *= p
 
                     # This should be bitwise identical, even for floats
+                    nt.assert_equal(check[:, :, :], truth[:, :, :])
+
+                    # Try full array assignment with slices containing None start
+                    # values
+                    if p != self.rank:
+                        shm[None] = None
+                    else:
+                        shm[:, :, :] = local
+
+                    check[:, :, :] = shm[:, :, :]
                     nt.assert_equal(check[:, :, :], truth[:, :, :])
 
                 # Ensure that we can reference the memory buffer from numpy without
