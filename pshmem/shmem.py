@@ -279,6 +279,13 @@ class MPIShared(object):
         if hasattr(self, "_win") and (self._win is not None):
             self._win.Free()
             self._win = None
+        # Free other communicators if needed
+        if hasattr(self, "_rankcomm") and (self._rankcomm is not None):
+            self._rankcomm.Free()
+            self._rankcomm = None
+        if hasattr(self, "_nodecomm") and (self._nodecomm is not None):
+            self._nodecomm.Free()
+            self._nodecomm = None
         return
 
     @property
