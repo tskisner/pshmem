@@ -25,7 +25,11 @@ jobs:
       run: ./test_scripts/install_deps_github_ubuntu.sh
     - name: Install Package
       run: pip3 install .
-    - name: Run Tests
+    - name: Run Serial Test
+      run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 1 Process
+      run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 2 Processes
       run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
   macos:
     runs-on: macos-latest
@@ -43,5 +47,11 @@ jobs:
       run: ./test_scripts/install_deps_github_macos.sh
     - name: Install Package
       run: pip3 install .
-    - name: Run Tests
+    - name: Run Serial Test
+      run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 1 Process
+      run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 2 Processes
       run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 4 Processes
+      run: mpirun -np 4 python3 -c 'import pshmem.test; pshmem.test.run()'
