@@ -31,6 +31,8 @@ jobs:
       run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
     - name: Run MPI Test on 2 Processes
       run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 4 Processes
+      run: mpirun -np 4 python3 -c 'import pshmem.test; pshmem.test.run()'
   macos:
     runs-on: macos-latest
     strategy:
