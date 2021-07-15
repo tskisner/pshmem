@@ -44,7 +44,14 @@ class ShmemTest(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_allocate(self):
+    def read_write(self, comm):
+        """Run a sequence of various access tests."""
+        rank = 0
+        procs = 1
+        if comm is not None:
+            rank = comm.rank
+            procs = comm.size
+
         # Dimensions of our shared memory array
         datadims = (2, 5, 10)
 
@@ -63,21 +70,21 @@ class ShmemTest(unittest.TestCase):
             # For testing the "set()" method, every process is going to
             # create a full-sized data buffer and fill it with its process rank.
             local = np.ones(datadims, dtype=datatype)
-            local *= self.rank
+            local *= rank
 
             # A context manager is the pythonic way to make sure that the
             # object has no dangling reference counts after leaving the context,
             # and will ensure that the shared memory is freed properly.
 
-            with MPIShared(local.shape, local.dtype, self.comm) as shm:
-                for p in range(self.procs):
+            with MPIShared(local.shape, local.dtype, comm) as shm:
+                for p in range(procs):
                     # Every process takes turns writing to the buffer.
                     setdata = None
                     setoffset = (0, 0, 0)
 
                     # Write to the whole data volume, but in small blocks
                     for upd in range(nupdate):
-                        if p == self.rank:
+                        if p == rank:
                             # My turn!  Write my process rank to the buffer slab.
                             setdata = local[
                                 setoffset[0] : setoffset[0] + updatedims[0],
@@ -89,22 +96,17 @@ class ShmemTest(unittest.TestCase):
                             shm.set(setdata, setoffset, fromrank=p)
                         except:
                             print(
-                                "proc {} threw exception during set()".format(
-                                    self.rank
-                                ),
+                                "proc {} threw exception during set()".format(rank),
                                 flush=True,
                             )
-                            if self.comm is not None:
-                                self.comm.Abort()
+                            if comm is not None:
+                                comm.Abort()
                             else:
                                 sys.exit(1)
 
                         try:
                             # Same as set(), but using __setitem__ with an
                             # allreduce to find which process is setting.
-                            #
-                            # key as a tuple of offsets
-                            shm[setoffset] = setdata
 
                             # key as a tuple slices
                             if setdata is None:
@@ -118,20 +120,18 @@ class ShmemTest(unittest.TestCase):
                         except:
                             print(
                                 "proc {} threw exception during __setitem__".format(
-                                    self.rank
+                                    rank
                                 ),
                                 flush=True,
                             )
-                            if self.comm is not None:
+                            if comm is not None:
                                 exc_type, exc_value, exc_traceback = sys.exc_info()
                                 lines = traceback.format_exception(
                                     exc_type, exc_value, exc_traceback
                                 )
-                                lines = [
-                                    "Proc {}: {}".format(self.rank, x) for x in lines
-                                ]
+                                lines = ["Proc {}: {}".format(rank, x) for x in lines]
                                 print("".join(lines), flush=True)
-                                self.comm.Abort()
+                                comm.Abort()
                             else:
                                 raise
 
@@ -164,7 +164,7 @@ class ShmemTest(unittest.TestCase):
 
                     # Try full array assignment with slices containing None start
                     # values
-                    if p != self.rank:
+                    if p != rank:
                         shm[None] = None
                     else:
                         shm[:, :, :] = local
@@ -177,8 +177,8 @@ class ShmemTest(unittest.TestCase):
                 # buffer should appear as a C-contiguous ndarray whenever we slice
                 # along the last dimension.
 
-                for p in range(self.procs):
-                    if p == self.rank:
+                for p in range(procs):
+                    if p == rank:
                         slc = shm[1, 2]
                         print(
                             "proc {} slice has dims {}, dtype {}, C = {}".format(
@@ -186,8 +186,40 @@ class ShmemTest(unittest.TestCase):
                             ),
                             flush=True,
                         )
-                    if self.comm is not None:
-                        self.comm.barrier()
+                    if comm is not None:
+                        comm.barrier()
+
+    def test_world(self):
+        if self.comm is None:
+            print("Testing MPIShared without MPI...", flush=True)
+        elif self.comm.rank == 0:
+            print("Testing MPIShared with world communicator...", flush=True)
+        self.read_write(self.comm)
+
+    def test_split(self):
+        if self.comm is not None:
+            if self.comm.rank == 0:
+                print("Testing MPIShared with split grid communicator...", flush=True)
+            # Split the comm into a grid
+            n_y = int(np.sqrt(self.comm.size))
+            if n_y < 1:
+                n_y = 1
+            n_x = self.comm.size // n_y
+            y_rank = self.comm.rank // n_x
+            x_rank = self.comm.rank % n_x
+
+            x_comm = self.comm.Split(y_rank, x_rank)
+            y_comm = self.comm.Split(x_rank, y_rank)
+
+            self.read_write(x_comm)
+            self.read_write(y_comm)
+
+    def test_comm_self(self):
+        if self.comm is not None:
+            if self.comm.rank == 0:
+                print("Testing MPIShared with COMM_SELF...", flush=True)
+            # Every process does the operations on COMM_SELF
+            self.read_write(MPI.COMM_SELF)
 
     def test_shape(self):
         good_dims = [
@@ -256,7 +288,7 @@ class LockTest(unittest.TestCase):
 
 def run():
     suite = unittest.TestSuite()
-    # suite.addTest(unittest.makeSuite(LockTest))
+    suite.addTest(unittest.makeSuite(LockTest))
     suite.addTest(unittest.makeSuite(ShmemTest))
     runner = unittest.TextTestRunner()
     runner.run(suite)

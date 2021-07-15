@@ -32,8 +32,14 @@ jobs:
       run: ./test_scripts/install_deps_github_ubuntu.sh && pip install twine
     - name: Install Package
       run: pip install .
-    - name: Run Tests
-      run: mpirun -np 2 python -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run Serial Test
+      run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 1 Process
+      run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 2 Processes
+      run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run MPI Test on 4 Processes
+      run: mpirun -np 4 python3 -c 'import pshmem.test; pshmem.test.run()'
     - name: Build source package
       run: rm -rf dist && python setup.py sdist
     - name: Build wheels
