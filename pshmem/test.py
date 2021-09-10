@@ -229,6 +229,8 @@ class ShmemTest(unittest.TestCase):
             np.array([10, 2], dtype=np.int),
         ]
         bad_dims = [
+            (-1,),
+            (0,),
             (2, 5.5, 10),
             np.array([10, 2], dtype=np.float32),
             np.array([5, 2], dtype=np.float64),
@@ -243,7 +245,7 @@ class ShmemTest(unittest.TestCase):
                 if self.rank == 0:
                     print("successful creation with shape {}".format(dims), flush=True)
                 del shm
-            except ValueError:
+            except Exception:
                 if self.rank == 0:
                     print(
                         "unsuccessful creation with shape {}".format(dims), flush=True
@@ -254,7 +256,7 @@ class ShmemTest(unittest.TestCase):
                 if self.rank == 0:
                     print("unsuccessful rejection of shape {}".format(dims), flush=True)
                 del shm
-            except ValueError:
+            except Exception:
                 if self.rank == 0:
                     print("successful rejection of shape {}".format(dims), flush=True)
 
