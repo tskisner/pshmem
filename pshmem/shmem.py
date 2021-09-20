@@ -56,16 +56,12 @@ class MPIShared(object):
 
         self._shape = tuple(shape)
 
-        # Global communicator.  We duplicate this to prevent it getting deleted
-        # externally.
+        # Global communicator.
 
         self._comm = comm
         self._rank = 0
         self._procs = 1
         if self._comm is not None:
-            from mpi4py import MPI
-
-            self._comm = MPI.Comm.Dup(self._comm)
             self._rank = self._comm.rank
             self._procs = self._comm.size
 
@@ -301,9 +297,6 @@ class MPIShared(object):
         if hasattr(self, "_nodecomm") and (self._nodecomm is not None):
             self._nodecomm.Free()
             self._nodecomm = None
-        if hasattr(self, "_comm") and (self._comm is not None):
-            self._comm.Free()
-            self._comm = None
         return
 
     @property
