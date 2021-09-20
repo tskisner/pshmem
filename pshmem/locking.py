@@ -9,7 +9,7 @@ import itertools
 
 import numpy as np
 
-from .utils import mpi_check_abort, mpi_data_type
+from .utils import mpi_data_type
 
 
 class MPILock(object):
@@ -70,14 +70,19 @@ class MPILock(object):
             from mpi4py import MPI
 
             # Root allocates the buffer
-            status = 0
             try:
                 self._win = MPI.Win.Allocate(
                     nbytes, disp_unit=self._dsize, info=MPI.INFO_NULL, comm=self._comm
                 )
-            except:
-                status = 1
-            mpi_check_abort(self._comm, self._root, status, "memory allocation")
+            except Exception:
+                msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
+                    self._comm.rank, nbytes
+                )
+                msg += " ({} elements of {} bytes each".format(
+                    self._nlocal, self._dsize
+                )
+                print(msg, flush=True)
+                raise
 
             if self._rank == self._root:
                 # Root sets to zero
@@ -261,14 +266,11 @@ class MPILock(object):
                 np.logical_and(self._waiting < my_wait_val, self._waiting > 0)
             )[0]
             if len(invalid_indx) > 0:
-                print(
-                    "rank {} has lock (wait number {}) and found ranks with lower wait numbers: {}".format(
-                        self._rank, my_wait_val, self._waiting
-                    ),
-                    flush=True,
+                msg = "rank {} has lock (wait number {}) and found ranks ".format(
+                    self._rank, my_wait_val
                 )
-                if self._comm is not None:
-                    self._comm.Abort(1)
+                msg += "with lower wait numbers: {}".format(self._waiting)
+                raise RuntimeError(msg)
 
             # Find the next waiting process
             next_proc = np.where(self._waiting == my_wait_val + 1)[0]
@@ -276,28 +278,24 @@ class MPILock(object):
 
             if len(next_proc) > 1:
                 # This should never happen!
-                print(
-                    "rank {} has lock (wait number {}) and found multiple ranks next in line for token: {}".format(
-                        self._rank, my_wait_val, self._waiting
-                    ),
-                    flush=True,
+                msg = "rank {} has lock (wait number {}) and found ".format(
+                    self._rank,
+                    my_wait_val,
                 )
-                if self._comm is not None:
-                    self._comm.Abort(1)
+                msg += "multiple ranks next in line for token: {}".format(self._waiting)
+                raise RuntimeError(msg)
             elif len(next_proc) == 0:
                 # There seems to be no processes waiting for the lock.  This implies
                 # that there should also be no processes with even higher wait numbers.
                 # Check this.
                 invalid_indx = np.where(self._waiting > my_wait_val + 1)[0]
                 if len(invalid_indx) > 0:
-                    print(
-                        "rank {} has lock (wait number {}) and found no rank next in line but other ranks with wait numbers: {}".format(
-                            self._rank, my_wait_val, self._waiting
-                        ),
-                        flush=True,
+                    msg = "rank {} has lock (wait number {}) and found no ".format(
+                        self._rank, my_wait_val
                     )
-                    if self._comm is not None:
-                        self._comm.Abort(1)
+                    msg += "rank next in line but other ranks with wait "
+                    msg += "numbers: {}".format(self._waiting)
+                    raise RuntimeError(msg)
             else:
                 # There is one process waiting
                 receiver = next_proc[0]

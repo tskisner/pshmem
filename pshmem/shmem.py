@@ -8,7 +8,7 @@ import sys
 
 import numpy as np
 
-from .utils import mpi_check_abort, mpi_data_type
+from .utils import mpi_data_type
 
 
 class MPIShared(object):
@@ -47,7 +47,10 @@ class MPIShared(object):
         self._n = 1
         for d in shape:
             if not isinstance(d, (int, np.integer)):
-                msg = "input shape contains non-integer values"
+                msg = "input shape '{}' contains non-integer values".format(shape)
+                raise ValueError(msg)
+            if d <= 0:
+                msg = "input shape '{}' contains negative or zero values".format(shape)
                 raise ValueError(msg)
             self._n *= d
 
@@ -144,7 +147,6 @@ class MPIShared(object):
 
             # Every process allocates a piece of the buffer.  The per-
             # process pieces are guaranteed to be contiguous.
-            status = 0
             try:
                 self._win = MPI.Win.Allocate_shared(
                     nbytes,
@@ -152,18 +154,26 @@ class MPIShared(object):
                     info=MPI.INFO_NULL,
                     comm=self._nodecomm,
                 )
-            except:
-                status = 1
-            mpi_check_abort(self._nodecomm, 0, status, "shared memory allocation")
+            except Exception:
+                msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
+                    self._nodecomm.rank, nbytes
+                )
+                msg += " ({} elements of {} bytes each".format(
+                    self._nlocal, self._dsize
+                )
+                print(msg, flush=True)
+                raise
 
             # Every process looks up the memory address of rank zero's piece,
             # which is the start of the contiguous shared buffer.
-            status = 0
             try:
                 self._buffer, dsize = self._win.Shared_query(0)
             except:
-                status = 1
-            mpi_check_abort(self._nodecomm, 0, status, "shared memory query")
+                msg = "Process {} failed Win.Shared_query(0)".format(
+                    self._nodecomm.rank
+                )
+                print(msg, flush=True)
+                raise
 
         # Create a numpy array which acts as a "view" of the buffer.
         self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
@@ -213,10 +223,11 @@ class MPIShared(object):
         self._comm.Allreduce(check_rank, check_result, op=MPI.SUM)
         tot = np.sum(check_result)
         if tot > 1:
-            if self._rank == 0:
-                msg = "When setting data with [] notation, only one process may have a non-None value for the data"
-                print(msg, flush=True)
-                self._comm.Abort()
+            msg = "When setting data with [] notation, there were "
+            msg += "{} processes with a non-None value for the data".format(tot)
+            msg += " instead of one process."
+            raise RuntimeError(msg)
+
         from_rank = np.where(check_result == 1)[0][0]
 
         # compute the offset from the slice keys
@@ -368,10 +379,6 @@ class MPIShared(object):
                         "input data dimensions {} incompatible with "
                         "buffer ({})".format(len(data.shape), len(self._shape))
                     )
-                if self._comm is not None:
-                    print(msg, flush=True)
-                    self._comm.Abort()
-                else:
                     raise RuntimeError(msg)
             if offset is None:
                 offset = tuple([0 for x in self._shape])
@@ -380,11 +387,7 @@ class MPIShared(object):
                     "input offset dimensions {} incompatible with "
                     "buffer ({})".format(len(offset), len(self._shape))
                 )
-                if self._comm is not None:
-                    print(msg, flush=True)
-                    self._comm.Abort()
-                else:
-                    raise RuntimeError(msg)
+                raise RuntimeError(msg)
             if data.dtype != self._dtype:
                 msg = (
                     "input data type ({}, {}) incompatible with "
@@ -392,11 +395,7 @@ class MPIShared(object):
                         data.dtype.str, data.dtype.num, self._dtype.str, self._dtype.num
                     )
                 )
-                if self._comm is not None:
-                    print(msg, flush=True)
-                    self._comm.Abort()
-                else:
-                    raise RuntimeError(msg)
+                raise RuntimeError(msg)
 
         # The input data is coming from exactly one process on one node.
         # First, we broadcast the data from this process to the same node-rank
@@ -411,13 +410,11 @@ class MPIShared(object):
             # Verify that the node rank with the data actually has a member on
             # every node (see notes in the constructor).
             if target_noderank > self._maxsetrank:
-                if self._rank == 0:
-                    print(
-                        "set() called with data from a node rank which does"
-                        " not exist on all nodes",
-                        flush=True,
-                    )
-                    self._comm.Abort()
+                msg = "set() called with data from a node rank ({}) which does".format(
+                    target_noderank
+                )
+                msg += " not exist on all nodes"
+                raise RuntimeError(msg)
 
             if self._noderank == target_noderank:
                 # We are the lucky process on this node that gets to write
