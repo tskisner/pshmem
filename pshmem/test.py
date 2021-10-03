@@ -27,7 +27,7 @@ if use_mpi and (MPI is None):
     try:
         import mpi4py.MPI as MPI
     except ImportError:
-        raise ImportError("Cannot import mpi4py, will only test serial functionality.")
+        print("Cannot import mpi4py, will only test serial functionality.")
 
 
 class ShmemTest(unittest.TestCase):
@@ -44,7 +44,7 @@ class ShmemTest(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def read_write(self, comm):
+    def read_write(self, comm, comm_node=None, comm_node_rank=None):
         """Run a sequence of various access tests."""
         rank = 0
         procs = 1
@@ -76,7 +76,13 @@ class ShmemTest(unittest.TestCase):
             # object has no dangling reference counts after leaving the context,
             # and will ensure that the shared memory is freed properly.
 
-            with MPIShared(local.shape, local.dtype, comm) as shm:
+            with MPIShared(
+                local.shape,
+                local.dtype,
+                comm,
+                comm_node=comm_node,
+                comm_node_rank=comm_node_rank,
+            ) as shm:
                 for p in range(procs):
                     # Every process takes turns writing to the buffer.
                     setdata = None
@@ -94,7 +100,7 @@ class ShmemTest(unittest.TestCase):
                         try:
                             # All processes call set(), but only data on rank p matters.
                             shm.set(setdata, setoffset, fromrank=p)
-                        except:
+                        except (RuntimeError, ValueError):
                             print(
                                 "proc {} threw exception during set()".format(rank),
                                 flush=True,
@@ -117,7 +123,7 @@ class ShmemTest(unittest.TestCase):
                                     setoffset[1] : setoffset[1] + setdata.shape[1],
                                     setoffset[2] : setoffset[2] + setdata.shape[2],
                                 ] = setdata
-                        except:
+                        except (RuntimeError, ValueError):
                             print(
                                 "proc {} threw exception during __setitem__".format(
                                     rank
@@ -221,6 +227,36 @@ class ShmemTest(unittest.TestCase):
             # Every process does the operations on COMM_SELF
             self.read_write(MPI.COMM_SELF)
 
+    def test_comm_reuse(self):
+        if self.comm is not None:
+            if self.comm.rank == 0:
+                print("Testing MPIShared with re-used node comm...", flush=True)
+            nodecomm = self.comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            noderank = nodecomm.rank
+            nodeprocs = nodecomm.size
+            nodes = self.comm.size // nodeprocs
+            mynode = self.comm.rank // nodeprocs
+            rankcomm = self.comm.Split(noderank, mynode)
+
+            self.read_write(self.comm, comm_node=nodecomm, comm_node_rank=rankcomm)
+
+            if nodes > 1 and nodeprocs > 2:
+                # We have at least one node, test passing in an incorrect
+                # communicator for the node comm.
+                evenoddcomm = self.comm.Split(self.comm.rank % 2, self.comm.rank // 2)
+                try:
+                    test_shared = MPIShared(
+                        (10, 5),
+                        np.float64,
+                        self.comm,
+                        comm_node=evenoddcomm,
+                        comm_node_rank=evenoddcomm,
+                    )
+                    print("Failed to catch construction with bad node comm")
+                    self.assertTrue(False)
+                except ValueError:
+                    print("Successfully caught construction with bad node comm")
+
     def test_shape(self):
         good_dims = [
             (2, 5, 10),
@@ -245,7 +281,7 @@ class ShmemTest(unittest.TestCase):
                 if self.rank == 0:
                     print("successful creation with shape {}".format(dims), flush=True)
                 del shm
-            except Exception:
+            except (RuntimeError, ValueError):
                 if self.rank == 0:
                     print(
                         "unsuccessful creation with shape {}".format(dims), flush=True
@@ -256,7 +292,7 @@ class ShmemTest(unittest.TestCase):
                 if self.rank == 0:
                     print("unsuccessful rejection of shape {}".format(dims), flush=True)
                 del shm
-            except Exception:
+            except (RuntimeError, ValueError):
                 if self.rank == 0:
                     print("successful rejection of shape {}".format(dims), flush=True)
 

@@ -12,8 +12,7 @@ from .utils import mpi_data_type
 
 
 class MPIShared(object):
-    """
-    Create a shared memory buffer that is replicated across nodes.
+    """Create a shared memory buffer that is replicated across nodes.
 
     For the given array dimensions and datatype, the original communicator
     is split into groups of processes that can share memory (i.e. that are
@@ -32,13 +31,19 @@ class MPIShared(object):
     If comm is None, a simple local numpy array is used.
 
     Args:
-        shape (tuple): the dimensions of the array.
-        dtype (np.dtype): the data type of the array.
-        comm (MPI.Comm): the full communicator to use.  This may span
+        shape (tuple):  The dimensions of the array.
+        dtype (np.dtype):  The data type of the array.
+        comm (MPI.Comm):  The full communicator to use.  This may span
             multiple nodes, and each node will have a copy of the data.
+        comm_node (MPI.Comm):  The communicator of processes within the
+            same node.  If None, the node communicator will be created.
+        comm_node_rank (MPI.Comm):  The communicator of processes with
+            the same rank across all nodes.  If None, this will be
+            created.
+
     """
 
-    def __init__(self, shape, dtype, comm):
+    def __init__(self, shape, dtype, comm, comm_node=None, comm_node_rank=None):
         # Copy the datatype in order to support arguments that are aliases,
         # like "numpy.float64".
         self._dtype = np.dtype(dtype)
@@ -79,14 +84,43 @@ class MPIShared(object):
         if self._comm is not None:
             from mpi4py import MPI
 
-            self._nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            self._free_comm_node = False
+            if comm_node is None:
+                # Create it
+                self._nodecomm = self._comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                self._free_comm_node = True
+            else:
+                # Check it
+                if self._procs % comm_node.size != 0:
+                    msg = "Node communicator size ({}) does not divide ".format(
+                        comm_node.size
+                    )
+                    msg += "evenly into the total number of processes ({})".format(
+                        self._procs
+                    )
+                    raise ValueError(msg)
+                self._nodecomm = comm_node
             self._noderank = self._nodecomm.rank
             self._nodeprocs = self._nodecomm.size
             self._nodes = self._procs // self._nodeprocs
             if self._nodes * self._nodeprocs < self._procs:
                 self._nodes += 1
             self._mynode = self._rank // self._nodeprocs
-            self._rankcomm = self._comm.Split(self._noderank, self._mynode)
+
+            self._free_comm_node_rank = False
+            if comm_node_rank is None:
+                # Create it
+                self._rankcomm = self._comm.Split(self._noderank, self._mynode)
+                self._free_comm_node_rank = True
+            else:
+                # Check it
+                if comm_node_rank.size != self._nodes:
+                    msg = "Node rank communicator size ({}) does not match ".format(
+                        comm_node_rank.size
+                    )
+                    msg += "the number of nodes ({})".format(self._nodes)
+                    raise ValueError(msg)
+                self._rankcomm = comm_node_rank
 
         # Consider a corner case of the previous calculation.  Imagine that
         # the number of processes is not evenly divisible by the number of
@@ -291,10 +325,18 @@ class MPIShared(object):
             self._win.Free()
             self._win = None
         # Free other communicators if needed
-        if hasattr(self, "_rankcomm") and (self._rankcomm is not None):
+        if (
+            hasattr(self, "_rankcomm")
+            and (self._rankcomm is not None)
+            and self._free_comm_node_rank
+        ):
             self._rankcomm.Free()
             self._rankcomm = None
-        if hasattr(self, "_nodecomm") and (self._nodecomm is not None):
+        if (
+            hasattr(self, "_nodecomm")
+            and (self._nodecomm is not None)
+            and self._free_comm_node
+        ):
             self._nodecomm.Free()
             self._nodecomm = None
         return
