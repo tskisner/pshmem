@@ -54,8 +54,8 @@ class MPIShared(object):
             if not isinstance(d, (int, np.integer)):
                 msg = "input shape '{}' contains non-integer values".format(shape)
                 raise ValueError(msg)
-            if d <= 0:
-                msg = "input shape '{}' contains negative or zero values".format(shape)
+            if d < 0:
+                msg = "input shape '{}' contains negative values".format(shape)
                 raise ValueError(msg)
             self._n *= d
 
@@ -174,55 +174,59 @@ class MPIShared(object):
 
         self._win = None
         self._buffer = None
-        if self._comm is None:
-            self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"), order="C")
-        else:
-            import mpi4py.MPI as MPI
 
-            # Every process allocates a piece of the buffer.  The per-
-            # process pieces are guaranteed to be contiguous.
-            try:
-                self._win = MPI.Win.Allocate_shared(
-                    nbytes,
-                    disp_unit=self._dsize,
-                    info=MPI.INFO_NULL,
-                    comm=self._nodecomm,
-                )
-            except Exception:
-                msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
-                    self._nodecomm.rank, nbytes
-                )
-                msg += " ({} elements of {} bytes each".format(
-                    self._nlocal, self._dsize
-                )
-                print(msg, flush=True)
-                raise
+        # Only allocate our buffers if the total number of elements is > 0
 
-            # Every process looks up the memory address of rank zero's piece,
-            # which is the start of the contiguous shared buffer.
-            try:
-                self._buffer, dsize = self._win.Shared_query(0)
-            except:
-                msg = "Process {} failed Win.Shared_query(0)".format(
-                    self._nodecomm.rank
-                )
-                print(msg, flush=True)
-                raise
+        if self._n > 0:
+            if self._comm is None:
+                self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"), order="C")
+            else:
+                import mpi4py.MPI as MPI
 
-        # Create a numpy array which acts as a "view" of the buffer.
-        self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
-        self._flat = self._dbuf.view(self._dtype)
-        self.data = self._flat.reshape(self._shape)
+                # Every process allocates a piece of the buffer.  The per-
+                # process pieces are guaranteed to be contiguous.
+                try:
+                    self._win = MPI.Win.Allocate_shared(
+                        nbytes,
+                        disp_unit=self._dsize,
+                        info=MPI.INFO_NULL,
+                        comm=self._nodecomm,
+                    )
+                except Exception:
+                    msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
+                        self._nodecomm.rank, nbytes
+                    )
+                    msg += " ({} elements of {} bytes each".format(
+                        self._nlocal, self._dsize
+                    )
+                    print(msg, flush=True)
+                    raise
 
-        # Initialize to zero.  Any of the processes could do this to the
-        # whole buffer, but it is safe and easy for each process to just
-        # initialize its local piece.
+                # Every process looks up the memory address of rank zero's piece,
+                # which is the start of the contiguous shared buffer.
+                try:
+                    self._buffer, dsize = self._win.Shared_query(0)
+                except:
+                    msg = "Process {} failed Win.Shared_query(0)".format(
+                        self._nodecomm.rank
+                    )
+                    print(msg, flush=True)
+                    raise
 
-        # FIXME: change this back once every process is allocating a
-        # piece of the buffer.
-        # self._flat[self._localoffset:self._localoffset + self._nlocal] = 0
-        if self._noderank == 0:
-            self._flat[:] = 0
+            # Create a numpy array which acts as a "view" of the buffer.
+            self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
+            self._flat = self._dbuf.view(self._dtype)
+            self.data = self._flat.reshape(self._shape)
+
+            # Initialize to zero.  Any of the processes could do this to the
+            # whole buffer, but it is safe and easy for each process to just
+            # initialize its local piece.
+
+            # FIXME: change this back once every process is allocating a
+            # piece of the buffer.
+            # self._flat[self._localoffset:self._localoffset + self._nlocal] = 0
+            if self._noderank == 0:
+                self._flat[:] = 0
 
     def __del__(self):
         self.close()
@@ -235,12 +239,20 @@ class MPIShared(object):
         return False
 
     def __len__(self):
-        return len(self.data)
+        if self.data is None:
+            return 0
+        else:
+            return len(self.data)
 
     def __getitem__(self, key):
-        return self.data[key]
+        if self.data is None:
+            return None
+        else:
+            return self.data[key]
 
     def __setitem__(self, key, value):
+        if self.data is None:
+            raise RuntimeError("Data size is zero- cannot assign elements")
         if self._comm is None:
             # shortcut for the serial case
             self.data[key] = value
@@ -298,7 +310,10 @@ class MPIShared(object):
         self.set(value, offset=offset, fromrank=from_rank)
 
     def __iter__(self):
-        return iter(self.data)
+        if self.data is None:
+            return iter(list())
+        else:
+            return iter(self.data)
 
     def __repr__(self):
         val = "<MPIShared"
@@ -307,15 +322,18 @@ class MPIShared(object):
         )
         val += "\n  shape = {}, dtype = {}".format(self._shape, self._dtype)
 
-        if self._shape[0] <= 4:
-            val += "\n  [ "
-            for i in range(self._shape[0]):
-                val += "{} ".format(self.data[i])
-            val += "]"
+        if self.data is None:
+            val += "\n No Data"
         else:
-            val += "\n  [ {} {} ... {} {} ]".format(
-                self.data[0], self.data[1], self.data[-2], self.data[-1]
-            )
+            if self._shape[0] <= 4:
+                val += "\n  [ "
+                for i in range(self._shape[0]):
+                    val += "{} ".format(self.data[i])
+                val += "]"
+            else:
+                val += "\n  [ {} {} ... {} {} ]".format(
+                    self.data[0], self.data[1], self.data[-2], self.data[-1]
+                )
         val += "\n>"
         return val
 
@@ -411,6 +429,9 @@ class MPIShared(object):
         if self._comm is not None:
             self._comm.barrier()
 
+        if self.data is None:
+            raise RuntimeError("Data size is zero- cannot assign elements")
+
         # First check that the dimensions of the data and the offset tuple
         # match the shape of the data.
 
@@ -477,12 +498,13 @@ class MPIShared(object):
 
                 nodedata = None
                 if self._mynode == fromnode:
-                    nodedata = np.copy(data)
+                    # nodedata = np.array(data, copy=False).astype(self._dtype)
+                    nodedata = data
                 else:
                     nodedata = np.zeros(datashape, dtype=self._dtype)
 
                 # Broadcast the data buffer
-                self._rankcomm.Bcast(nodedata, root=fromnode)
+                self._rankcomm.Bcast((nodedata, self._mpitype), root=fromnode)
 
                 # Now one process on every node has a copy of the data, and
                 # can copy it into the shared memory buffer.
@@ -503,6 +525,9 @@ class MPIShared(object):
 
                 # Release the write-lock
                 self._win.Unlock(self._noderank)
+
+                # Delete the temporary copy
+                del nodedata
 
         else:
             # We are just copying to a numpy array...

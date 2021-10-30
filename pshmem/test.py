@@ -266,7 +266,6 @@ class ShmemTest(unittest.TestCase):
         ]
         bad_dims = [
             (-1,),
-            (0,),
             (2, 5.5, 10),
             np.array([10, 2], dtype=np.float32),
             np.array([5, 2], dtype=np.float64),
@@ -286,15 +285,47 @@ class ShmemTest(unittest.TestCase):
                     print(
                         "unsuccessful creation with shape {}".format(dims), flush=True
                     )
+                self.assertTrue(False)
         for dims in bad_dims:
             try:
                 shm = MPIShared(dims, dt, self.comm)
                 if self.rank == 0:
                     print("unsuccessful rejection of shape {}".format(dims), flush=True)
                 del shm
+                self.assertTrue(False)
             except (RuntimeError, ValueError):
                 if self.rank == 0:
                     print("successful rejection of shape {}".format(dims), flush=True)
+
+    def test_zero(self):
+        with MPIShared((0,), np.float64, self.comm) as shm:
+            self.assertTrue(len(shm) == 0)
+            self.assertTrue(shm[5] is None)
+            try:
+                shm[0] = 1.0
+                if self.rank == 0:
+                    print(
+                        "unsuccessful raise with no data during assignment", flush=True
+                    )
+                self.assertTrue(False)
+            except RuntimeError:
+                print(
+                    "successful raise with no data during assignment", flush=True
+                )
+            try:
+                if self.rank == 0:
+                    shm.set(1.0, fromrank=0)
+                else:
+                    shm.set(None, fromrank=0)
+                if self.rank == 0:
+                    print(
+                        "unsuccessful raise with no data during set()", flush=True
+                    )
+                self.assertTrue(False)
+            except RuntimeError:
+                print(
+                    "successful raise with no data during set()", flush=True
+                )
 
 
 class LockTest(unittest.TestCase):
