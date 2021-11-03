@@ -266,7 +266,7 @@ class MPIShared(object):
         check_result = np.zeros((self._procs,), dtype=np.int32)
         if value is not None:
             check_rank[self._rank] = 1
-        self._comm.Allreduce(check_rank, check_result, op=MPI.SUM)
+        self._comm.Allreduce([check_rank, MPI.INT], [check_result, MPI.INT], op=MPI.SUM)
         tot = np.sum(check_result)
         if tot > 1:
             msg = "When setting data with [] notation, there were "
@@ -504,7 +504,7 @@ class MPIShared(object):
                     nodedata = np.zeros(datashape, dtype=self._dtype)
 
                 # Broadcast the data buffer
-                self._rankcomm.Bcast((nodedata, self._mpitype), root=fromnode)
+                self._rankcomm.Bcast([nodedata, self._mpitype], root=fromnode)
 
                 # Now one process on every node has a copy of the data, and
                 # can copy it into the shared memory buffer.
