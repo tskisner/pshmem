@@ -179,7 +179,9 @@ class MPIShared(object):
 
         if self._n > 0:
             if self._comm is None:
-                self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"), order="C")
+                self._buffer = np.ndarray(
+                    shape=(nbytes,), dtype=np.dtype("B"), order="C"
+                )
             else:
                 import mpi4py.MPI as MPI
 

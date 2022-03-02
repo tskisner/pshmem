@@ -309,23 +309,17 @@ class ShmemTest(unittest.TestCase):
                     )
                 self.assertTrue(False)
             except RuntimeError:
-                print(
-                    "successful raise with no data during assignment", flush=True
-                )
+                print("successful raise with no data during assignment", flush=True)
             try:
                 if self.rank == 0:
                     shm.set(1.0, fromrank=0)
                 else:
                     shm.set(None, fromrank=0)
                 if self.rank == 0:
-                    print(
-                        "unsuccessful raise with no data during set()", flush=True
-                    )
+                    print("unsuccessful raise with no data during set()", flush=True)
                 self.assertTrue(False)
             except RuntimeError:
-                print(
-                    "successful raise with no data during set()", flush=True
-                )
+                print("successful raise with no data during set()", flush=True)
 
 
 class LockTest(unittest.TestCase):
