@@ -84,6 +84,8 @@ class MPILock(object):
                 print(msg, flush=True)
                 raise
 
+            self._win.Fence()
+
             if self._rank == self._root:
                 # Root sets to zero
                 self._win.Lock(self._root, MPI.LOCK_EXCLUSIVE)
@@ -94,6 +96,8 @@ class MPILock(object):
                 )
                 self._win.Flush(self._root)
                 self._win.Unlock(self._root)
+
+            self._win.Fence()
 
         return
 
@@ -110,6 +114,7 @@ class MPILock(object):
     def close(self):
         # Explicitly free the shared window
         if hasattr(self, "_win") and (self._win is not None):
+            self._win.Fence()
             self._win.Free()
             self._win = None
         return
@@ -143,6 +148,7 @@ class MPILock(object):
                     ),
                     flush=True,
                 )
+
             self._win.Lock(self._root, MPI.LOCK_EXCLUSIVE)
 
             # Get a local copy of the buffer

@@ -13,51 +13,66 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: ["3.6", "3.7", "3.9", "3.10"]
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.4.0
+      uses: styfle/cancel-workflow-action@0.9.1
       with:
         access_token: ${{ github.token }}
+
     - name: Checkout
       uses: actions/checkout@v2
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install Dependencies
       run: ./test_scripts/install_deps_github_ubuntu.sh
+
     - name: Install Package
       run: pip3 install .
+
     - name: Run Serial Test
       run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Run MPI Test on 1 Process
       run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Run MPI Test on 2 Processes
       run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+
   macos:
     runs-on: macos-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: ["3.6", "3.7", "3.9", "3.10"]
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.4.0
+      uses: styfle/cancel-workflow-action@0.9.1
       with:
         access_token: ${{ github.token }}
+
     - name: Checkout
       uses: actions/checkout@v2
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install Dependencies
       run: ./test_scripts/install_deps_github_macos.sh
+
     - name: Install Package
       run: pip3 install .
+
     - name: Run Serial Test
       run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Run MPI Test on 1 Process
       run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Run MPI Test on 2 Processes
       run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'

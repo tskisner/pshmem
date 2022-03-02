@@ -23,68 +23,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.4.0
+      uses: styfle/cancel-workflow-action@0.9.1
       with:
         access_token: ${{ github.token }}
+
     - name: Checkout
       uses: actions/checkout@v2
+
     - name: Set up Python 3.7
       uses: actions/setup-python@v2
       with:
         python-version: 3.7
+
     - name: Install Dependencies
       run: ./test_scripts/install_deps_github_ubuntu.sh && pip install twine
+
     - name: Install Package
       run: pip install .
+
     - name: Run Serial Test
       run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Run MPI Test on 1 Process
       run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Run MPI Test on 2 Processes
       run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+
     - name: Build source package
       run: rm -rf dist && python setup.py sdist
+
     - name: Build wheels
       run: mkdir -p wheelhouse && pip wheel -w wheelhouse .
+
     - name: Upload to PyPI
       run: |
         python -m twine upload dist/*.tar.gz && python -m twine upload wheelhouse/pshmem*.whl
-
-
-# jobs:
-#   wheels:
-#     name: Python wheels on ${{ matrix.os }}
-#     runs-on: ${{ matrix.os }}
-#     strategy:
-#       matrix:
-#         os: [ubuntu-latest, macos-latest]
-#     env:
-#       CIBW_BUILD: cp36-macosx_x86_64 cp36-manylinux_x86_64 cp37-macosx_x86_64 cp37-manylinux_x86_64 cp38-macosx_x86_64 cp38-manylinux_x86_64
-#       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-#       CIBW_MANYLINUX_I686_IMAGE: manylinux2014
-#       CIBW_BUILD_VERBOSITY: 3
-#       CIBW_ENVIRONMENT_LINUX: "PATH=/usr/lib64/mpich-3.2/bin:${PATH}"
-#       CIBW_BEFORE_BUILD_LINUX: ./test_scripts/install_deps_cibuildwheel_linux.sh
-#       CIBW_BEFORE_BUILD_MACOS: ./test_scripts/install_deps_cibuildwheel_macos.sh
-#       CIBW_BEFORE_TEST: pip3 install numpy && pip3 install mpi4py
-#       CIBW_TEST_COMMAND: mpirun -np 2 python -c 'import pshmem; pshmem.test()'
-#     steps:
-#     - uses: actions/checkout@v2
-#     - uses: actions/setup-python@v2
-#       name: Install Python
-#       with:
-#         python-version: '3.7'
-#     - name: Install cibuildwheel
-#       run: |
-#         python -m pip install twine cibuildwheel==1.4.2
-#     - name: Build wheel
-#       run: |
-#         python -m cibuildwheel --output-dir wheelhouse
-#     - name: Upload to PyPI
-#       run: |
-#         python -m twine upload wheelhouse/*.whl
-
-# - uses: actions/upload-artifact@v2
-#   with:
-#     name: wheels
-#     path: ./wheelhouse

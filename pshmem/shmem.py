@@ -179,7 +179,9 @@ class MPIShared(object):
 
         if self._n > 0:
             if self._comm is None:
-                self._buffer = np.ndarray(shape=(nbytes,), dtype=np.dtype("B"), order="C")
+                self._buffer = np.ndarray(
+                    shape=(nbytes,), dtype=np.dtype("B"), order="C"
+                )
             else:
                 import mpi4py.MPI as MPI
 
@@ -205,6 +207,7 @@ class MPIShared(object):
                 # Every process looks up the memory address of rank zero's piece,
                 # which is the start of the contiguous shared buffer.
                 try:
+                    self._win.Fence()
                     self._buffer, dsize = self._win.Shared_query(0)
                 except:
                     msg = "Process {} failed Win.Shared_query(0)".format(
@@ -340,6 +343,7 @@ class MPIShared(object):
     def close(self):
         # Explicitly free the shared memory window.
         if hasattr(self, "_win") and (self._win is not None):
+            self._win.Fence()
             self._win.Free()
             self._win = None
         # Free other communicators if needed
@@ -528,6 +532,8 @@ class MPIShared(object):
 
                 # Delete the temporary copy
                 del nodedata
+
+            self._win.Fence()
 
         else:
             # We are just copying to a numpy array...
