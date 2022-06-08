@@ -202,7 +202,7 @@ class MPIShared(object):
                         )
                     else:
                         self._win = MPI.Win.Allocate_shared(
-                            8 * self._dsize,
+                            4096,
                             disp_unit=self._dsize,
                             info=MPI.INFO_NULL,
                             comm=self._nodecomm,
