@@ -146,6 +146,11 @@ class MPIShared(object):
         # thing.  We should change this back once we figure out how to
         # take the raw pointer from rank zero and present it to numpy as the
         # the full buffer.
+        #
+        # Additional workaround:  Some device libraries (e.g. libfabric) give
+        # an error if attempting to allocate a shared window with zero local
+        # bytes.  Here we have the non-root processes allocate a few bytes
+        # of a dummy buffer.
 
         # dist = self._disthelper(self._n, self._nodeprocs)
         # self._localoffset, self._nlocal = dist[self._noderank]
@@ -188,12 +193,20 @@ class MPIShared(object):
                 # Every process allocates a piece of the buffer.  The per-
                 # process pieces are guaranteed to be contiguous.
                 try:
-                    self._win = MPI.Win.Allocate_shared(
-                        nbytes,
-                        disp_unit=self._dsize,
-                        info=MPI.INFO_NULL,
-                        comm=self._nodecomm,
-                    )
+                    if self._noderank == 0:
+                        self._win = MPI.Win.Allocate_shared(
+                            nbytes,
+                            disp_unit=self._dsize,
+                            info=MPI.INFO_NULL,
+                            comm=self._nodecomm,
+                        )
+                    else:
+                        self._win = MPI.Win.Allocate_shared(
+                            8 * self._dsize,
+                            disp_unit=self._dsize,
+                            info=MPI.INFO_NULL,
+                            comm=self._nodecomm,
+                        )
                 except Exception:
                     msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
                         self._nodecomm.rank, nbytes
