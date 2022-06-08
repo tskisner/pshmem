@@ -245,59 +245,64 @@ class ShmemTest(unittest.TestCase):
                 mygroupnode = grank // gnodeprocs
                 gnoderankcomm = gcomm.Split(gnodecomm.rank, mygroupnode)
 
-            # For each process group, construct a rectangular process grid.  Create a
+            # For each process group, test several grid configurations.  Create a
             # communicator along each row and column of this grid, as well as inter-node
             # and intra-node communicators along each row and column.
 
-            grid_rows = int(np.sqrt(self.comm.size))
-            grid_cols = gcomm.size // grid_rows
+            sq_rows = int(np.sqrt(gsize))
+            if sq_rows == 0:
+                sq_rows = 1
+            for grid_rows in [sq_rows, 1, gsize]:
+                grid_cols = gcomm.size // grid_rows
 
-            col_rank = gcomm.rank // grid_cols
-            row_rank = gcomm.rank % grid_cols
+                col_rank = gcomm.rank // grid_cols
+                row_rank = gcomm.rank % grid_cols
 
-            if grid_cols == 1:
-                comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
-            else:
-                comm_row = gcomm.Split(col_rank, row_rank)
+                if grid_cols == 1:
+                    comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
+                else:
+                    comm_row = gcomm.Split(col_rank, row_rank)
 
-            if grid_rows == 1:
-                comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
-            else:
-                comm_col = gcomm.Split(row_rank, col_rank)
+                if grid_rows == 1:
+                    comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
+                else:
+                    comm_col = gcomm.Split(row_rank, col_rank)
 
-            # Node and node-rank comms for each row and col.
-            comm_row_node = comm_row.Split_type(MPI.COMM_TYPE_SHARED, 0)
-            row_nodeprocs = comm_row_node.size
-            row_node = comm_row.rank // row_nodeprocs
-            comm_row_rank_node = comm_row.Split(comm_row_node.rank, row_node)
+                # Node and node-rank comms for each row and col.
+                comm_row_node = comm_row.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                row_nodeprocs = comm_row_node.size
+                row_node = comm_row.rank // row_nodeprocs
+                comm_row_rank_node = comm_row.Split(comm_row_node.rank, row_node)
 
-            comm_col_node = comm_col.Split_type(MPI.COMM_TYPE_SHARED, 0)
-            col_nodeprocs = comm_col_node.size
-            col_node = comm_col.rank // col_nodeprocs
-            comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
+                comm_col_node = comm_col.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                col_nodeprocs = comm_col_node.size
+                col_node = comm_col.rank // col_nodeprocs
+                comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
 
-            # Test the access and creation of shared memory objects across all
-            # these different communicators.
+                # Test the access and creation of shared memory objects across all
+                # these different communicators.
 
-            self.read_write(wcomm, comm_node=nodecomm, comm_node_rank=noderankcomm)
-            wcomm.barrier()
+                self.read_write(wcomm, comm_node=nodecomm, comm_node_rank=noderankcomm)
+                wcomm.barrier()
 
-            self.read_write(gcomm, comm_node=gnodecomm, comm_node_rank=gnoderankcomm)
-            wcomm.barrier()
+                self.read_write(gcomm, comm_node=gnodecomm, comm_node_rank=gnoderankcomm)
+                wcomm.barrier()
 
-            self.read_write(comm_row, comm_node=comm_row_node, comm_node_rank=comm_row_rank_node)
-            wcomm.barrier()
+                self.read_write(comm_row, comm_node=comm_row_node, comm_node_rank=comm_row_rank_node)
+                wcomm.barrier()
 
-            self.read_write(comm_col, comm_node=comm_col_node, comm_node_rank=comm_col_rank_node)
-            wcomm.barrier()
+                self.read_write(comm_col, comm_node=comm_col_node, comm_node_rank=comm_col_rank_node)
+                wcomm.barrier()
 
-            # Clean up all of these.
-            comm_col_rank_node.Free()
-            comm_row_rank_node.Free()
-            comm_col_node.Free()
-            comm_row_node.Free()
-            comm_col.Free()
-            comm_row.Free()
+                # Clean up row / column communicators
+                comm_col_rank_node.Free()
+                comm_row_rank_node.Free()
+                comm_col_node.Free()
+                comm_row_node.Free()
+                comm_col.Free()
+                comm_row.Free()
+
+            # Clean up group communicators
             if ngroups > 1:
                 gnoderankcomm.Free()
                 gnodecomm.Free()
