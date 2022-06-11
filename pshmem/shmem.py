@@ -146,6 +146,11 @@ class MPIShared(object):
         # thing.  We should change this back once we figure out how to
         # take the raw pointer from rank zero and present it to numpy as the
         # the full buffer.
+        #
+        # Additional workaround:  Some device libraries (e.g. libfabric) give
+        # an error if attempting to allocate a shared window with zero local
+        # bytes.  Here we have the non-root processes allocate a few bytes
+        # of a dummy buffer.
 
         # dist = self._disthelper(self._n, self._nodeprocs)
         # self._localoffset, self._nlocal = dist[self._noderank]
@@ -169,8 +174,16 @@ class MPIShared(object):
         self._flat = None
         self.data = None
 
-        # Number of bytes in our buffer
+        # Number of bytes used in our local buffer
         nbytes = self._nlocal * self._dsize
+
+        # Number of bytes to allocate in the window.  Non-root
+        # processes allocate a small fake buffer to avoid errors
+        # in some MPI implementations.
+        if self._noderank == 0:
+            nalloc = nbytes
+        else:
+            nalloc = 4096
 
         self._win = None
         self._buffer = None
@@ -189,16 +202,16 @@ class MPIShared(object):
                 # process pieces are guaranteed to be contiguous.
                 try:
                     self._win = MPI.Win.Allocate_shared(
-                        nbytes,
+                        nalloc,
                         disp_unit=self._dsize,
                         info=MPI.INFO_NULL,
                         comm=self._nodecomm,
                     )
                 except Exception:
                     msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
-                        self._nodecomm.rank, nbytes
+                        self._nodecomm.rank, nalloc
                     )
-                    msg += " ({} elements of {} bytes each".format(
+                    msg += " (to support {} elements of {} bytes each)".format(
                         self._nlocal, self._dsize
                     )
                     print(msg, flush=True)

@@ -205,20 +205,111 @@ class ShmemTest(unittest.TestCase):
     def test_split(self):
         if self.comm is not None:
             if self.comm.rank == 0:
-                print("Testing MPIShared with split grid communicator...", flush=True)
-            # Split the comm into a grid
-            n_y = int(np.sqrt(self.comm.size))
-            if n_y < 1:
-                n_y = 1
-            n_x = self.comm.size // n_y
-            y_rank = self.comm.rank // n_x
-            x_rank = self.comm.rank % n_x
+                print("Testing MPIShared with split communicators...", flush=True)
 
-            x_comm = self.comm.Split(y_rank, x_rank)
-            y_comm = self.comm.Split(x_rank, y_rank)
+            # Take the world comm and create intra-node and inter-node comms
+            wcomm = self.comm
+            wrank = wcomm.rank
+            wsize = wcomm.size
+            nodecomm = wcomm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+            nodeprocs = nodecomm.size
+            myworldnode = wrank // nodeprocs
+            noderankcomm = wcomm.Split(nodecomm.rank, myworldnode)
 
-            self.read_write(x_comm)
-            self.read_write(y_comm)
+            # Now split the world comm into groups
+            gsize = 1
+            if wsize >= 2:
+                gsize = wsize // 2
+            ngroups = wsize // gsize
+            group = wrank // gsize
+            grank = wrank % gsize
+
+            if ngroups == 1:
+                # We just have one group with all processes.  The group comm is the same
+                # as the world, and same with the intra-node and inter-node comms.
+                gcomm = wcomm
+                gnodecomm = nodecomm
+                gnodeprocs = gnodecomm.size
+                mygroupnode = grank // gnodeprocs
+                gnoderankcomm = noderankcomm
+                # In the case of one group, the group-wise rank communicator
+                # is just each individual process.
+                rcomm = MPI.COMM_SELF
+            else:
+                # We need to split the world communicator into groups, and then create
+                # inter-node and intra-node comms for each group.
+                gcomm = wcomm.Split(group, grank)
+                rcomm = wcomm.Split(grank, group)
+                gnodecomm = gcomm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                gnodeprocs = gnodecomm.size
+                mygroupnode = grank // gnodeprocs
+                gnoderankcomm = gcomm.Split(gnodecomm.rank, mygroupnode)
+
+            # For each process group, test several grid configurations.  Create a
+            # communicator along each row and column of this grid, as well as inter-node
+            # and intra-node communicators along each row and column.
+
+            sq_rows = int(np.sqrt(gsize))
+            if sq_rows == 0:
+                sq_rows = 1
+            for grid_rows in [sq_rows, 1, gsize]:
+                grid_cols = gcomm.size // grid_rows
+
+                col_rank = gcomm.rank // grid_cols
+                row_rank = gcomm.rank % grid_cols
+
+                if grid_cols == 1:
+                    comm_row = MPI.Comm.Dup(MPI.COMM_SELF)
+                else:
+                    comm_row = gcomm.Split(col_rank, row_rank)
+
+                if grid_rows == 1:
+                    comm_col = MPI.Comm.Dup(MPI.COMM_SELF)
+                else:
+                    comm_col = gcomm.Split(row_rank, col_rank)
+
+                # Node and node-rank comms for each row and col.
+                comm_row_node = comm_row.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                row_nodeprocs = comm_row_node.size
+                row_node = comm_row.rank // row_nodeprocs
+                comm_row_rank_node = comm_row.Split(comm_row_node.rank, row_node)
+
+                comm_col_node = comm_col.Split_type(MPI.COMM_TYPE_SHARED, 0)
+                col_nodeprocs = comm_col_node.size
+                col_node = comm_col.rank // col_nodeprocs
+                comm_col_rank_node = comm_col.Split(comm_col_node.rank, col_node)
+
+                # Test the access and creation of shared memory objects across all
+                # these different communicators.
+
+                self.read_write(wcomm, comm_node=nodecomm, comm_node_rank=noderankcomm)
+                wcomm.barrier()
+
+                self.read_write(gcomm, comm_node=gnodecomm, comm_node_rank=gnoderankcomm)
+                wcomm.barrier()
+
+                self.read_write(comm_row, comm_node=comm_row_node, comm_node_rank=comm_row_rank_node)
+                wcomm.barrier()
+
+                self.read_write(comm_col, comm_node=comm_col_node, comm_node_rank=comm_col_rank_node)
+                wcomm.barrier()
+
+                # Clean up row / column communicators
+                comm_col_rank_node.Free()
+                comm_row_rank_node.Free()
+                comm_col_node.Free()
+                comm_row_node.Free()
+                comm_col.Free()
+                comm_row.Free()
+
+            # Clean up group communicators
+            if ngroups > 1:
+                gnoderankcomm.Free()
+                gnodecomm.Free()
+                rcomm.Free()
+                gcomm.Free()
+            noderankcomm.Free()
+            nodecomm.Free()
 
     def test_comm_self(self):
         if self.comm is not None:
