@@ -174,8 +174,16 @@ class MPIShared(object):
         self._flat = None
         self.data = None
 
-        # Number of bytes in our buffer
+        # Number of bytes used in our local buffer
         nbytes = self._nlocal * self._dsize
+
+        # Number of bytes to allocate in the window.  Non-root
+        # processes allocate a small fake buffer to avoid errors
+        # in some MPI implementations.
+        if self._noderank == 0:
+            nalloc = nbytes
+        else:
+            nalloc = 4096
 
         self._win = None
         self._buffer = None
@@ -193,25 +201,17 @@ class MPIShared(object):
                 # Every process allocates a piece of the buffer.  The per-
                 # process pieces are guaranteed to be contiguous.
                 try:
-                    if self._noderank == 0:
-                        self._win = MPI.Win.Allocate_shared(
-                            nbytes,
-                            disp_unit=self._dsize,
-                            info=MPI.INFO_NULL,
-                            comm=self._nodecomm,
-                        )
-                    else:
-                        self._win = MPI.Win.Allocate_shared(
-                            4096,
-                            disp_unit=self._dsize,
-                            info=MPI.INFO_NULL,
-                            comm=self._nodecomm,
-                        )
+                    self._win = MPI.Win.Allocate_shared(
+                        nalloc,
+                        disp_unit=self._dsize,
+                        info=MPI.INFO_NULL,
+                        comm=self._nodecomm,
+                    )
                 except Exception:
                     msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
-                        self._nodecomm.rank, nbytes
+                        self._nodecomm.rank, nalloc
                     )
-                    msg += " ({} elements of {} bytes each".format(
+                    msg += " (to support {} elements of {} bytes each)".format(
                         self._nlocal, self._dsize
                     )
                     print(msg, flush=True)
