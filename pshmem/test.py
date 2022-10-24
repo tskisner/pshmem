@@ -388,6 +388,17 @@ class ShmemTest(unittest.TestCase):
                 if self.rank == 0:
                     print("successful rejection of shape {}".format(dims), flush=True)
 
+    def test_array(self):
+        dims = (2, 5, 10)
+        dt = np.float64
+        with MPIShared(dims, dt, self.comm) as shm:
+            view = np.array(shm, copy=False)
+            vptr, vflag = view.__array_interface__["data"]
+            sptr, sflag = shm._dbuf.__array_interface__["data"]
+            print(f"numpy view address = {vptr}")
+            print(f"original address = {sptr}")
+            self.assertTrue(vptr == sptr)
+
     def test_zero(self):
         with MPIShared((0,), np.float64, self.comm) as shm:
             self.assertTrue(len(shm) == 0)
