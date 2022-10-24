@@ -326,10 +326,15 @@ class MPIShared(object):
         self.set(value, offset=offset, fromrank=from_rank)
 
     def __iter__(self):
+        """This provides sample-by-sample access."""
         if self.data is None:
             return iter(list())
         else:
             return iter(self.data)
+
+    def __array__(self):
+        """Provide the underlying numpy data view as the array interface."""
+        return self.data
 
     def __repr__(self):
         val = "<MPIShared"
