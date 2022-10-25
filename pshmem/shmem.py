@@ -332,9 +332,14 @@ class MPIShared(object):
         else:
             return iter(self.data)
 
-    def __array__(self):
+    def __array__(self, *args, **kwargs):
+        """Provide the underlying numpy data view as the array."""
+        return self.data.__array__(*args, **kwargs)
+
+    @property
+    def __array_interface__(self):
         """Provide the underlying numpy data view as the array interface."""
-        return self.data
+        return self.data.__array_interface__
 
     def __repr__(self):
         val = "<MPIShared"
