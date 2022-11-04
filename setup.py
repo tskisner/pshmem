@@ -25,7 +25,7 @@ setup(
     scripts=None,
     license="BSD",
     python_requires=">=3.6.0",
-    install_requires=["numpy", "posix-ipc"],
+    install_requires=["numpy", "posix_ipc"],
     extras_require={"mpi": ["mpi4py>=3.0"]},
     cmdclass=versioneer.get_cmdclass(),
     classifiers=[
