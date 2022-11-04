@@ -5,8 +5,11 @@
 ##
 
 import sys
+import mmap
+import uuid
 
 import numpy as np
+import posix_ipc
 
 from .utils import mpi_data_type
 
@@ -133,114 +136,90 @@ class MPIShared(object):
         dist = self._disthelper(self._procs, self._nodes)
         self._maxsetrank = dist[-1][1] - 1
 
-        # Divide up the total memory size among the processes on each
-        # node.  For reasonable NUMA settings, this should spread the
-        # allocated memory to locations across the node.
-
-        # FIXME: the above statement works fine for allocating the window,
-        # and it is also great in C/C++ where the pointer to the start of
-        # the buffer is all you need.  In mpi4py, querying the rank-0 buffer
-        # returns a buffer-interface-compatible object, not just a pointer.
-        # And this "buffer object" has the size of just the rank-0 allocated
-        # data.  SO, for now, disable this and have rank 0 allocate the whole
-        # thing.  We should change this back once we figure out how to
-        # take the raw pointer from rank zero and present it to numpy as the
-        # the full buffer.
-        #
-        # Additional workaround:  Some device libraries (e.g. libfabric) give
-        # an error if attempting to allocate a shared window with zero local
-        # bytes.  Here we have the non-root processes allocate a few bytes
-        # of a dummy buffer.
-
-        # dist = self._disthelper(self._n, self._nodeprocs)
-        # self._localoffset, self._nlocal = dist[self._noderank]
-        if self._noderank == 0:
-            self._localoffset = 0
-            self._nlocal = self._n
-        else:
-            self._localoffset = 0
-            self._nlocal = 0
-
         # Compute the data sizes
         self._dsize, self._mpitype = mpi_data_type(self._comm, self._dtype)
 
-        # Allocate the shared memory buffer and wrap it in a
-        # numpy array.  If the communicator is None, just make
-        # a normal numpy array.
+        # Number of bytes used on our node
+        nbytes = self._n * self._dsize
 
-        self._win = None
-        self._buffer = None
-        self._dbuf = None
-        self._flat = None
-        self.data = None
+        # Every process will open a shared memory segment.  We use the same
+        # unique name for this segment, based on the properties of the array
+        # and a unique random ID.
 
-        # Number of bytes used in our local buffer
-        nbytes = self._nlocal * self._dsize
-
-        # Number of bytes to allocate in the window.  Non-root
-        # processes allocate a small fake buffer to avoid errors
-        # in some MPI implementations.
-        if self._noderank == 0:
-            nalloc = nbytes
-        else:
-            nalloc = 4096
-
-        self._win = None
-        self._buffer = None
+        self._name = None
+        if self._rank == 0:
+            rng_str = uuid.uuid4().hex[:12]
+            self._name = f"MPIShared_{rng_str}"
+        if self._comm is not None:
+            self._name = self._comm.bcast(self._name, root=0)
 
         # Only allocate our buffers if the total number of elements is > 0
 
+        self._shmem = None
+        self._shmap = None
+        self._flat = None
+        self.data = None
+
         if self._n > 0:
-            if self._comm is None:
-                self._buffer = np.ndarray(
-                    shape=(nbytes,), dtype=np.dtype("B"), order="C"
-                )
-            else:
-                import mpi4py.MPI as MPI
-
-                # Every process allocates a piece of the buffer.  The per-
-                # process pieces are guaranteed to be contiguous.
+            # First rank on each node creates the buffer
+            if self._noderank == 0:
                 try:
-                    self._win = MPI.Win.Allocate_shared(
-                        nalloc,
-                        disp_unit=self._dsize,
-                        info=MPI.INFO_NULL,
-                        comm=self._nodecomm,
+                    self._shmem = posix_ipc.SharedMemory(
+                        self._name,
+                        posix_ipc.O_CREX,
+                        size=int(nbytes),
                     )
-                except Exception:
-                    msg = "Process {} failed Win.Allocate_shared of {} bytes".format(
-                        self._nodecomm.rank, nalloc
+                    # MMap the shared memory
+                    self._shmap = mmap.mmap(
+                        self._shmem.fd,
+                        self._shmem.size,
                     )
-                    msg += " (to support {} elements of {} bytes each)".format(
-                        self._nlocal, self._dsize
+                except Exception as e:
+                    msg = "Process {}: {}".format(self._rank, self._name)
+                    msg += " failed allocation of {} bytes".format(nbytes)
+                    msg += " ({} elements of {} bytes each)".format(
+                        self._n, self._dsize
                     )
+                    msg += ": {}".format(e)
                     print(msg, flush=True)
                     raise
 
-                # Every process looks up the memory address of rank zero's piece,
-                # which is the start of the contiguous shared buffer.
+            # Wait for that to be created
+            if self._nodecomm is not None:
+                self._nodecomm.barrier()
+
+            # Other ranks on the node attach
+            if self._noderank != 0:
                 try:
-                    self._win.Fence()
-                    self._buffer, dsize = self._win.Shared_query(0)
-                except:
-                    msg = "Process {} failed Win.Shared_query(0)".format(
-                        self._nodecomm.rank
+                    self._shmem = posix_ipc.SharedMemory(self._name)
+                    # MMap the shared memory
+                    self._shmap = mmap.mmap(
+                        self._shmem.fd,
+                        self._shmem.size,
                     )
+                except Exception as e:
+                    msg = "Process {}: {}".format(self._rank, self._name)
+                    msg += " failed to attach buffer of {} bytes".format(nbytes)
+                    msg += " ({} elements of {} bytes each)".format(
+                        self._n, self._dsize
+                    )
+                    msg += ": {}".format(e)
                     print(msg, flush=True)
                     raise
 
-            # Create a numpy array which acts as a "view" of the buffer.
-            self._dbuf = np.array(self._buffer, dtype=np.dtype("B"), copy=False)
-            self._flat = self._dbuf.view(self._dtype)
+            # Now that all processes have mmap'ed the shared memory we can
+            # close the shared memory handle
+            self._shmem.close_fd()
+
+            # Create a numpy array which acts as a view of the buffer.
+            self._flat = np.ndarray(
+                self._shape,
+                dtype=self._dtype,
+                buffer=self._shmap,
+            )
             self.data = self._flat.reshape(self._shape)
 
-            # Initialize to zero.  Any of the processes could do this to the
-            # whole buffer, but it is safe and easy for each process to just
-            # initialize its local piece.
-
-            # FIXME: change this back once every process is allocating a
-            # piece of the buffer.
-            # self._flat[self._localoffset:self._localoffset + self._nlocal] = 0
+            # Initialize to zero.
             if self._noderank == 0:
                 self._flat[:] = 0
 
@@ -364,11 +343,36 @@ class MPIShared(object):
         return val
 
     def close(self):
-        # Explicitly free the shared memory window.
-        if hasattr(self, "_win") and (self._win is not None):
-            self._win.Fence()
-            self._win.Free()
-            self._win = None
+        # Other processes close their access to the shared memory
+        if hasattr(self, "data"):
+            del self.data
+        if hasattr(self, "_flat"):
+            del self._flat
+        if hasattr(self, "_shmap"):
+            # Close the mmap'ed memory
+            if self._shmap is not None:
+                self._shmap.close()
+                del self._shmap
+                self._shmap = None
+        # Wait
+        if hasattr(self, "_nodecomm"):
+            if self._nodecomm is not None:
+                self._nodecomm.barrier()
+        # One process unlinks (deletes) the shared memory
+        if hasattr(self, "_shmem"):
+            if self._shmem is not None:
+                if self._noderank == 0 and self._shmem is not None:
+                    try:
+                        self._shmem.unlink()
+                    except posix_ipc.ExistentialError:
+                        # This means that the OS already cleaned it up
+                        pass
+                del self._shmem
+                self._shmem = None
+
+        self._flat = None
+        self.data = None
+
         # Free other communicators if needed
         if (
             hasattr(self, "_rankcomm")
@@ -384,7 +388,6 @@ class MPIShared(object):
         ):
             self._nodecomm.Free()
             self._nodecomm = None
-        return
 
     @property
     def shape(self):
@@ -544,33 +547,21 @@ class MPIShared(object):
                     )
                 slc = tuple(dslice)
 
-                # Get a write-lock on the shared memory
-                self._win.Lock(self._noderank, MPI.LOCK_EXCLUSIVE)
-
                 # Copy data slice
                 self.data[slc] = nodedata
 
-                # Release the write-lock
-                self._win.Unlock(self._noderank)
-
                 # Delete the temporary copy
                 del nodedata
-
-            self._win.Fence()
-
         else:
-            # We are just copying to a numpy array...
+            # We are just copying to the array view
             dslice = []
             ndims = len(data.shape)
             for d in range(ndims):
                 dslice.append(slice(offset[d], offset[d] + data.shape[d], 1))
             slc = tuple(dslice)
-
             self.data[slc] = data
 
         # Explicit barrier here, to ensure that other processes do not try
         # reading data before the writing processes have finished.
         if self._comm is not None:
             self._comm.barrier()
-
-        return

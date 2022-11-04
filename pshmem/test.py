@@ -370,6 +370,7 @@ class ShmemTest(unittest.TestCase):
                 shm = MPIShared(dims, dt, self.comm)
                 if self.rank == 0:
                     print("successful creation with shape {}".format(dims), flush=True)
+                shm.close()
                 del shm
             except (RuntimeError, ValueError):
                 if self.rank == 0:
@@ -382,6 +383,7 @@ class ShmemTest(unittest.TestCase):
                 shm = MPIShared(dims, dt, self.comm)
                 if self.rank == 0:
                     print("unsuccessful rejection of shape {}".format(dims), flush=True)
+                shm.close()
                 del shm
                 self.assertTrue(False)
             except (RuntimeError, ValueError):
@@ -394,7 +396,7 @@ class ShmemTest(unittest.TestCase):
         with MPIShared(dims, dt, self.comm) as shm:
             view = np.array(shm, copy=False)
             vptr, vflag = view.__array_interface__["data"]
-            sptr, sflag = shm._dbuf.__array_interface__["data"]
+            sptr, sflag = shm._flat.__array_interface__["data"]
             print(f"numpy view address = {vptr}")
             print(f"original address = {sptr}")
             self.assertTrue(vptr == sptr)

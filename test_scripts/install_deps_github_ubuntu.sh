@@ -16,4 +16,5 @@ sudo apt-get install -y build-essential libmpich-dev
 pip3 install setuptools
 pip3 install wheel
 pip3 install numpy
+pip3 install posix_ipc
 pip3 install mpi4py
