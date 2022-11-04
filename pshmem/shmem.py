@@ -148,11 +148,8 @@ class MPIShared(object):
 
         self._name = None
         if self._rank == 0:
-            rng_str = uuid.uuid4().hex
-            prop_str = f"MPIShared-{self._procs}_{self._shape[0]}"
-            for s in self._shape[1:]:
-                prop_str = f"{prop_str}x{s}"
-            self._name = f"{prop_str}_{self._dtype}_{rng_str}"
+            rng_str = uuid.uuid4().hex[:12]
+            self._name = f"MPIShared_{rng_str}"
         if self._comm is not None:
             self._name = self._comm.bcast(self._name, root=0)
 
