@@ -354,10 +354,6 @@ class MPIShared(object):
                 self._shmap.close()
                 del self._shmap
                 self._shmap = None
-        # Wait
-        if hasattr(self, "_nodecomm"):
-            if self._nodecomm is not None:
-                self._nodecomm.barrier()
         # One process unlinks (deletes) the shared memory
         if hasattr(self, "_shmem"):
             if self._shmem is not None:
