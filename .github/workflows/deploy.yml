@@ -23,17 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.9.1
+      uses: styfle/cancel-workflow-action@0.11.0
       with:
         access_token: ${{ github.token }}
 
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v2
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
       with:
-        python-version: 3.7
+        python-version: 3.9
 
     - name: Install Dependencies
       run: ./test_scripts/install_deps_github_ubuntu.sh && pip install twine
