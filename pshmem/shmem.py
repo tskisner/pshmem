@@ -169,11 +169,6 @@ class MPIShared(object):
                         posix_ipc.O_CREX,
                         size=int(nbytes),
                     )
-                    # MMap the shared memory
-                    self._shmap = mmap.mmap(
-                        self._shmem.fd,
-                        self._shmem.size,
-                    )
                 except Exception as e:
                     msg = "Process {}: {}".format(self._rank, self._name)
                     msg += " failed allocation of {} bytes".format(nbytes)
@@ -182,6 +177,27 @@ class MPIShared(object):
                     )
                     msg += ": {}".format(e)
                     print(msg, flush=True)
+                    raise
+                try:
+                    # MMap the shared memory
+                    self._shmap = mmap.mmap(
+                        self._shmem.fd,
+                        self._shmem.size,
+                    )
+                except Exception as e:
+                    msg = "Process {}: {}".format(self._rank, self._name)
+                    msg += " failed MMap of {} bytes".format(nbytes)
+                    msg += " ({} elements of {} bytes each)".format(
+                        self._n, self._dsize
+                    )
+                    msg += ": {}".format(e)
+                    print(msg, flush=True)
+                    # Try to free the shared memory object
+                    try:
+                        self._shmem.close_fd()
+                        self._shmem.unlink()
+                    except Exception as eclose:
+                        pass
                     raise
 
             # Wait for that to be created
@@ -207,9 +223,29 @@ class MPIShared(object):
                     print(msg, flush=True)
                     raise
 
+            # Wait for other processes to attach
+            if self._nodecomm is not None:
+                self._nodecomm.barrier()
+
             # Now that all processes have mmap'ed the shared memory we can
             # close the shared memory handle
             self._shmem.close_fd()
+
+            # Wait for all processes to close file handle
+            if self._nodecomm is not None:
+                self._nodecomm.barrier()
+
+            # One process requests the file to be deleted, but this will not
+            # actually happen until all processes release their mmap.
+            if self._noderank == 0:
+                try:
+                    self._shmem.unlink()
+                except posix_ipc.ExistentialError:
+                    msg = "Process {}: {}".format(self._rank, self._name)
+                    msg += " failed to unlink shared memory"
+                    msg += ": {}".format(e)
+                    print(msg, flush=True)
+                    raise
 
             # Create a numpy array which acts as a view of the buffer.
             self._flat = np.ndarray(
@@ -354,15 +390,8 @@ class MPIShared(object):
                 self._shmap.close()
                 del self._shmap
                 self._shmap = None
-        # One process unlinks (deletes) the shared memory
         if hasattr(self, "_shmem"):
             if self._shmem is not None:
-                if self._noderank == 0 and self._shmem is not None:
-                    try:
-                        self._shmem.unlink()
-                    except posix_ipc.ExistentialError:
-                        # This means that the OS already cleaned it up
-                        pass
                 del self._shmem
                 self._shmem = None
 
