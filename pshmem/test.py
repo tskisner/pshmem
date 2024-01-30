@@ -353,7 +353,7 @@ class ShmemTest(unittest.TestCase):
             (2, 5, 10),
             np.array([10, 2], dtype=np.int32),
             np.array([5, 2], dtype=np.int64),
-            np.array([10, 2], dtype=np.int),
+            np.array([10, 2], dtype=np.int_),
         ]
         bad_dims = [
             (-1,),
