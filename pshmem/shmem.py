@@ -1,17 +1,17 @@
 ##
-# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2024, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
 
 import sys
 import mmap
-import uuid
+from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
-import posix_ipc
+import sysv_ipc
 
-from .utils import mpi_data_type
+from .utils import mpi_data_type, random_shm_key
 
 
 class MPIShared(object):
@@ -148,9 +148,12 @@ class MPIShared(object):
 
         self._name = None
         if self._rank == 0:
-            rng_str = uuid.uuid4().hex[:12]
-            self._name = f"MPIShared_{rng_str}"
+            # Get a random 64bit integer between the supported range of keys
+            self._shm_index = random_shm_key()
+            # Name, just used for printing
+            self._name = f"MPIShared_{self._shm_index}"
         if self._comm is not None:
+            self._shm_index = self._comm.bcast(self._shm_index, root=0)
             self._name = self._comm.bcast(self._name, root=0)
 
         # Only allocate our buffers if the total number of elements is > 0
@@ -176,9 +179,9 @@ class MPIShared(object):
                 # First rank on each node creates the buffer
                 if self._noderank == 0:
                     try:
-                        self._shmem = posix_ipc.SharedMemory(
-                            self._name,
-                            posix_ipc.O_CREX,
+                        self._shmem = sysv_ipc.SharedMemory(
+                            self._shm_index,
+                            sysv_ipc.IPC_CREX,
                             size=int(nbytes),
                         )
                     except Exception as e:
@@ -219,7 +222,7 @@ class MPIShared(object):
                 # Other ranks on the node attach
                 if self._noderank != 0:
                     try:
-                        self._shmem = posix_ipc.SharedMemory(self._name)
+                        self._shmem = sysv_ipc.SharedMemory(self._shm_index, 0)
                         # MMap the shared memory
                         self._shmap = mmap.mmap(
                             self._shmem.fd,
@@ -251,10 +254,10 @@ class MPIShared(object):
                 # actually happen until all processes release their mmap.
                 if self._noderank == 0:
                     try:
-                        self._shmem.unlink()
-                    except posix_ipc.ExistentialError:
+                        self._shmem.remove()
+                    except sysv_ipc.ExistentialError:
                         msg = "Process {}: {}".format(self._rank, self._name)
-                        msg += " failed to unlink shared memory"
+                        msg += " failed to remove shared memory"
                         msg += ": {}".format(e)
                         print(msg, flush=True)
                         raise

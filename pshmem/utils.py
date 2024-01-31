@@ -1,10 +1,13 @@
 ##
-# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2024, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
 
+import random
+
 import numpy as np
+import sysv_ipc
 
 
 def mpi_data_type(comm, dt):
@@ -42,3 +45,20 @@ def mpi_data_type(comm, dt):
             raise
         dsize = mpitype.Get_size()
     return (dsize, mpitype)
+
+
+def random_shm_key():
+    """Get a random 64bit integer in the range supported by shmget()
+
+    The python random library is used, and seeded with the default source
+    (either system time or os.urandom).
+
+    Returns:
+        (int):  The random integer.
+
+    """
+    min_val = sysv_ipc.KEY_MIN
+    max_val = sysv_ipc.KEY_MAX
+    # Seed with default source of randomness
+    random.seed(a=None)
+    return random.randint(min_val, max_val)
