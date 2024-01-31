@@ -425,6 +425,19 @@ class ShmemTest(unittest.TestCase):
             except RuntimeError:
                 print("successful raise with no data during set()", flush=True)
 
+    # def test_hang(self):
+    #     # Run this while monitoring memory usage (e.g. with htop) and then
+    #     # do kill -9 on one of the processes to verify that the kernel
+    #     # releases shared memory.
+    #     dims = (200, 1000000)
+    #     dt = np.float64
+    #     shm = MPIShared(dims, dt, self.comm)
+    #     import time
+    #     time.sleep(60)
+    #     shm.close()
+    #     del shm
+    #     return
+
 
 class LockTest(unittest.TestCase):
     def setUp(self):
