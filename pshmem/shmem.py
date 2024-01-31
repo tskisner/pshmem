@@ -1,17 +1,15 @@
 ##
-# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2024, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
 
 import sys
-import mmap
-import uuid
 
 import numpy as np
-import posix_ipc
+import sysv_ipc
 
-from .utils import mpi_data_type
+from .utils import mpi_data_type, random_shm_key
 
 
 class MPIShared(object):
@@ -147,16 +145,19 @@ class MPIShared(object):
         # and a unique random ID.
 
         self._name = None
+        self._shm_index = None
         if self._rank == 0:
-            rng_str = uuid.uuid4().hex[:12]
-            self._name = f"MPIShared_{rng_str}"
+            # Get a random 64bit integer between the supported range of keys
+            self._shm_index = random_shm_key()
+            # Name, just used for printing
+            self._name = f"MPIShared_{self._shm_index}"
         if self._comm is not None:
+            self._shm_index = self._comm.bcast(self._shm_index, root=0)
             self._name = self._comm.bcast(self._name, root=0)
 
         # Only allocate our buffers if the total number of elements is > 0
 
         self._shmem = None
-        self._shmap = None
         self._flat = None
         self.data = None
 
@@ -176,9 +177,9 @@ class MPIShared(object):
                 # First rank on each node creates the buffer
                 if self._noderank == 0:
                     try:
-                        self._shmem = posix_ipc.SharedMemory(
-                            self._name,
-                            posix_ipc.O_CREX,
+                        self._shmem = sysv_ipc.SharedMemory(
+                            self._shm_index,
+                            flags=sysv_ipc.IPC_CREX,
                             size=int(nbytes),
                         )
                     except Exception as e:
@@ -190,27 +191,6 @@ class MPIShared(object):
                         msg += ": {}".format(e)
                         print(msg, flush=True)
                         raise
-                    try:
-                        # MMap the shared memory
-                        self._shmap = mmap.mmap(
-                            self._shmem.fd,
-                            self._shmem.size,
-                        )
-                    except Exception as e:
-                        msg = "Process {}: {}".format(self._rank, self._name)
-                        msg += " failed MMap of {} bytes".format(nbytes)
-                        msg += " ({} elements of {} bytes each)".format(
-                            self._n, self._dsize
-                        )
-                        msg += ": {}".format(e)
-                        print(msg, flush=True)
-                        # Try to free the shared memory object
-                        try:
-                            self._shmem.close_fd()
-                            self._shmem.unlink()
-                        except Exception as eclose:
-                            pass
-                        raise
 
                 # Wait for that to be created
                 if self._nodecomm is not None:
@@ -219,11 +199,8 @@ class MPIShared(object):
                 # Other ranks on the node attach
                 if self._noderank != 0:
                     try:
-                        self._shmem = posix_ipc.SharedMemory(self._name)
-                        # MMap the shared memory
-                        self._shmap = mmap.mmap(
-                            self._shmem.fd,
-                            self._shmem.size,
+                        self._shmem = sysv_ipc.SharedMemory(
+                            self._shm_index, flags=0, size=0
                         )
                     except Exception as e:
                         msg = "Process {}: {}".format(self._rank, self._name)
@@ -239,22 +216,15 @@ class MPIShared(object):
                 if self._nodecomm is not None:
                     self._nodecomm.barrier()
 
-                # Now that all processes have mmap'ed the shared memory we can
-                # close the shared memory handle
-                self._shmem.close_fd()
-
-                # Wait for all processes to close file handle
-                if self._nodecomm is not None:
-                    self._nodecomm.barrier()
-
-                # One process requests the file to be deleted, but this will not
-                # actually happen until all processes release their mmap.
+                # Now the rank zero process will call remove() to mark the shared
+                # memory segment for removal.  However, this will not actually
+                # be removed until all processes detach.
                 if self._noderank == 0:
                     try:
-                        self._shmem.unlink()
-                    except posix_ipc.ExistentialError:
+                        self._shmem.remove()
+                    except sysv_ipc.ExistentialError:
                         msg = "Process {}: {}".format(self._rank, self._name)
-                        msg += " failed to unlink shared memory"
+                        msg += " failed to remove shared memory"
                         msg += ": {}".format(e)
                         print(msg, flush=True)
                         raise
@@ -263,7 +233,7 @@ class MPIShared(object):
                 self._flat = np.ndarray(
                     self._n,
                     dtype=self._dtype,
-                    buffer=self._shmap,
+                    buffer=self._shmem,
                 )
                 # Initialize to zero.
                 if self._noderank == 0:
@@ -271,8 +241,6 @@ class MPIShared(object):
 
                 # Wrap
                 self.data = self._flat.reshape(self._shape)
-
-
 
     def __del__(self):
         self.close()
@@ -399,17 +367,11 @@ class MPIShared(object):
             del self.data
         if hasattr(self, "_flat"):
             del self._flat
-        if hasattr(self, "_shmap"):
-            # Close the mmap'ed memory
-            if self._shmap is not None:
-                self._shmap.close()
-                del self._shmap
-                self._shmap = None
         if hasattr(self, "_shmem"):
             if self._shmem is not None:
+                self._shmem.detach()
                 del self._shmem
                 self._shmem = None
-
         self._flat = None
         self.data = None
 

@@ -1,5 +1,5 @@
 ##
-# Copyright (c) 2017-2020, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2024, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
@@ -424,6 +424,19 @@ class ShmemTest(unittest.TestCase):
                 self.assertTrue(False)
             except RuntimeError:
                 print("successful raise with no data during set()", flush=True)
+
+    # def test_hang(self):
+    #     # Run this while monitoring memory usage (e.g. with htop) and then
+    #     # do kill -9 on one of the processes to verify that the kernel
+    #     # releases shared memory.
+    #     dims = (200, 1000000)
+    #     dt = np.float64
+    #     shm = MPIShared(dims, dt, self.comm)
+    #     import time
+    #     time.sleep(60)
+    #     shm.close()
+    #     del shm
+    #     return
 
 
 class LockTest(unittest.TestCase):
