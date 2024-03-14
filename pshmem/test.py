@@ -467,6 +467,10 @@ class LockTest(unittest.TestCase):
 
 
 def run():
+    comm = None
+    if MPI is not None:
+        comm = MPI.COMM_WORLD
+
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(LockTest))
     suite.addTest(unittest.makeSuite(ShmemTest))
@@ -477,8 +481,8 @@ def run():
     if not _ret.wasSuccessful():
         ret += 1
 
-    if self.comm is not None:
-        ret = self.comm.allreduce(ret, op=MPI.SUM)
+    if comm is not None:
+        ret = comm.allreduce(ret, op=MPI.SUM)
 
     if ret > 0:
         print(f"{ret} Processes had failures")
