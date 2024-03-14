@@ -212,7 +212,21 @@ class MPIShared(object):
                         print(msg, flush=True)
                         raise
 
-                # Wait for other processes to attach
+                # Create a numpy array which acts as a view of the buffer.
+                self._flat = np.ndarray(
+                    self._n,
+                    dtype=self._dtype,
+                    buffer=self._shmem,
+                )
+
+                # Initialize to zero.
+                if self._noderank == 0:
+                    self._flat[:] = 0
+
+                # Wrap
+                self.data = self._flat.reshape(self._shape)
+
+                # Wait for other processes to attach and wrap
                 if self._nodecomm is not None:
                     self._nodecomm.barrier()
 
@@ -228,19 +242,6 @@ class MPIShared(object):
                         msg += ": {}".format(e)
                         print(msg, flush=True)
                         raise
-
-                # Create a numpy array which acts as a view of the buffer.
-                self._flat = np.ndarray(
-                    self._n,
-                    dtype=self._dtype,
-                    buffer=self._shmem,
-                )
-                # Initialize to zero.
-                if self._noderank == 0:
-                    self._flat[:] = 0
-
-                # Wrap
-                self.data = self._flat.reshape(self._shape)
 
     def __del__(self):
         self.close()
