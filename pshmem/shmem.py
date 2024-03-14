@@ -212,10 +212,6 @@ class MPIShared(object):
                         print(msg, flush=True)
                         raise
 
-                # Wait for other processes to attach
-                if self._nodecomm is not None:
-                    self._nodecomm.barrier()
-
                 # Create a numpy array which acts as a view of the buffer.
                 self._flat = np.ndarray(
                     self._n,
@@ -229,6 +225,10 @@ class MPIShared(object):
 
                 # Wrap
                 self.data = self._flat.reshape(self._shape)
+
+                # Wait for other processes to attach and wrap
+                if self._nodecomm is not None:
+                    self._nodecomm.barrier()
 
                 # Now the rank zero process will call remove() to mark the shared
                 # memory segment for removal.  However, this will not actually
