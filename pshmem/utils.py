@@ -5,9 +5,11 @@
 ##
 
 import random
+import sys
+# Import for monkey patching resource tracker
+from multiprocessing import resource_tracker
 
 import numpy as np
-import sysv_ipc
 
 
 def mpi_data_type(comm, dt):
@@ -48,7 +50,7 @@ def mpi_data_type(comm, dt):
 
 
 def random_shm_key():
-    """Get a random 64bit integer in the range supported by shmget()
+    """Get a random positive integer for using in shared memory naming.
 
     The python random library is used, and seeded with the default source
     (either system time or os.urandom).
@@ -57,8 +59,30 @@ def random_shm_key():
         (int):  The random integer.
 
     """
-    min_val = sysv_ipc.KEY_MIN
-    max_val = sysv_ipc.KEY_MAX
+    min_val = 0
+    max_val = sys.maxsize
     # Seed with default source of randomness
     random.seed(a=None)
     return random.randint(min_val, max_val)
+
+
+def remove_shm_from_resource_tracker():
+    """Monkey-patch multiprocessing.resource_tracker so SharedMemory won't be tracked
+
+    More details at: https://bugs.python.org/issue38119
+    """
+
+    def fix_register(name, rtype):
+        if rtype == "shared_memory":
+            return
+        return resource_tracker._resource_tracker.register(self, name, rtype)
+    resource_tracker.register = fix_register
+
+    def fix_unregister(name, rtype):
+        if rtype == "shared_memory":
+            return
+        return resource_tracker._resource_tracker.unregister(self, name, rtype)
+    resource_tracker.unregister = fix_unregister
+
+    if "shared_memory" in resource_tracker._CLEANUP_FUNCS:
+        del resource_tracker._CLEANUP_FUNCS["shared_memory"]
