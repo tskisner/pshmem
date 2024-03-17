@@ -5,9 +5,9 @@
 ##
 
 import random
+import sys
 
 import numpy as np
-import sysv_ipc
 
 
 def mpi_data_type(comm, dt):
@@ -48,7 +48,7 @@ def mpi_data_type(comm, dt):
 
 
 def random_shm_key():
-    """Get a random 64bit integer in the range supported by shmget()
+    """Get a random positive integer for using in shared memory naming.
 
     The python random library is used, and seeded with the default source
     (either system time or os.urandom).
@@ -57,8 +57,8 @@ def random_shm_key():
         (int):  The random integer.
 
     """
-    min_val = sysv_ipc.KEY_MIN
-    max_val = sysv_ipc.KEY_MAX
+    min_val = 0
+    max_val = sys.maxsize
     # Seed with default source of randomness
     random.seed(a=None)
     return random.randint(min_val, max_val)

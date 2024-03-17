@@ -432,9 +432,14 @@ class ShmemTest(unittest.TestCase):
     #     dims = (200, 1000000)
     #     dt = np.float64
     #     shm = MPIShared(dims, dt, self.comm)
+    #     if self.comm is None or self.comm.rank == 0:
+    #         temp = np.ones(dims, dtype=dt)
+    #     else:
+    #         temp = None
+    #     shm.set(temp, fromrank=0)
+    #     del temp
     #     import time
     #     time.sleep(60)
-    #     shm.close()
     #     del shm
     #     return
 

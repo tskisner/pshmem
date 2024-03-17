@@ -5,9 +5,9 @@
 ##
 
 import sys
+from multiprocessing import shared_memory
 
 import numpy as np
-import sysv_ipc
 
 from .utils import mpi_data_type, random_shm_key
 
@@ -149,7 +149,7 @@ class MPIShared(object):
         if self._rank == 0:
             # Get a random 64bit integer between the supported range of keys
             self._shm_index = random_shm_key()
-            # Name, just used for printing
+            # Name, used as global tag.
             self._name = f"MPIShared_{self._shm_index}"
         if self._comm is not None:
             self._shm_index = self._comm.bcast(self._shm_index, root=0)
@@ -177,10 +177,8 @@ class MPIShared(object):
                 # First rank on each node creates the buffer
                 if self._noderank == 0:
                     try:
-                        self._shmem = sysv_ipc.SharedMemory(
-                            self._shm_index,
-                            flags=sysv_ipc.IPC_CREX,
-                            size=int(nbytes),
+                        self._shmem = shared_memory.SharedMemory(
+                            name=self._name, create=True, size=int(nbytes),
                         )
                     except Exception as e:
                         msg = "Process {}: {}".format(self._rank, self._name)
@@ -199,8 +197,8 @@ class MPIShared(object):
                 # Other ranks on the node attach
                 if self._noderank != 0:
                     try:
-                        self._shmem = sysv_ipc.SharedMemory(
-                            self._shm_index, flags=0, size=0
+                        self._shmem = shared_memory.SharedMemory(
+                            name=self._name, create=False, size=int(nbytes)
                         )
                     except Exception as e:
                         msg = "Process {}: {}".format(self._rank, self._name)
@@ -216,7 +214,7 @@ class MPIShared(object):
                 self._flat = np.ndarray(
                     self._n,
                     dtype=self._dtype,
-                    buffer=self._shmem,
+                    buffer=self._shmem.buf,
                 )
 
                 # Initialize to zero.
@@ -229,19 +227,6 @@ class MPIShared(object):
                 # Wait for other processes to attach and wrap
                 if self._nodecomm is not None:
                     self._nodecomm.barrier()
-
-                # Now the rank zero process will call remove() to mark the shared
-                # memory segment for removal.  However, this will not actually
-                # be removed until all processes detach.
-                if self._noderank == 0:
-                    try:
-                        self._shmem.remove()
-                    except sysv_ipc.ExistentialError:
-                        msg = "Process {}: {}".format(self._rank, self._name)
-                        msg += " failed to remove shared memory"
-                        msg += ": {}".format(e)
-                        print(msg, flush=True)
-                        raise
 
     def __del__(self):
         self.close()
@@ -370,7 +355,9 @@ class MPIShared(object):
             del self._flat
         if hasattr(self, "_shmem"):
             if self._shmem is not None:
-                self._shmem.detach()
+                self._shmem.close()
+                if self._noderank == 0:
+                    self._shmem.unlink()
                 del self._shmem
                 self._shmem = None
         self._flat = None
