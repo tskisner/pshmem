@@ -9,7 +9,15 @@ from multiprocessing import shared_memory
 
 import numpy as np
 
-from .utils import mpi_data_type, random_shm_key
+from .utils import (
+    mpi_data_type,
+    random_shm_key,
+    remove_shm_from_resource_tracker,
+)
+
+# Monkey patch resource_tracker.  Remove once upstream CPython
+# changes are merged.
+remove_shm_from_resource_tracker()
 
 
 class MPIShared(object):
