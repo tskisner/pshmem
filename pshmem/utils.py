@@ -1,15 +1,63 @@
 ##
-# Copyright (c) 2017-2024, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2025, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
 
 import random
 import sys
-# Import for monkey patching resource tracker
-from multiprocessing import resource_tracker
+import threading
+import time
+import traceback
+from contextlib import contextmanager
+from multiprocessing import resource_tracker as _mprt
+from multiprocessing import shared_memory as _mpshm
 
 import numpy as np
+
+
+"""Backport the new `track` option from python 3.13 to older versions
+More details at: https://github.com/python/cpython/issues/82300
+"""
+if sys.version_info >= (3, 13):
+    SharedMemory = _mpshm.SharedMemory
+else:
+    class SharedMemory(_mpshm.SharedMemory):
+        __lock = threading.Lock()
+
+        def __init__(
+            self, name: str | None = None, create: bool = False,
+            size: int = 0, *, track: bool = True
+        ) -> None:
+            self._track = track
+
+            # if tracking, normal init will suffice
+            if track:
+                return super().__init__(name=name, create=create, size=size)
+
+            # lock so that other threads don't attempt to use the
+            # register function during this time
+            with self.__lock:
+                # temporarily disable registration during initialization
+                orig_register = _mprt.register
+                _mprt.register = self.__tmp_register
+
+                # initialize; ensure original register function is
+                # re-instated
+                try:
+                    super().__init__(name=name, create=create, size=size)
+                finally:
+                    _mprt.register = orig_register
+
+        @staticmethod
+        def __tmp_register(*args, **kwargs) -> None:
+            return
+
+        def unlink(self) -> None:
+            if _mpshm._USE_POSIX and self._name:
+                _mpshm._posixshmem.shm_unlink(self._name)
+                if self._track:
+                    _mprt.unregister(self._name, "shared_memory")
 
 
 def mpi_data_type(comm, dt):
@@ -66,23 +114,34 @@ def random_shm_key():
     return random.randint(min_val, max_val)
 
 
-def remove_shm_from_resource_tracker():
-    """Monkey-patch multiprocessing.resource_tracker so SharedMemory won't be tracked
+@contextmanager
+def exception_guard(comm=None, timeout=5):
+    """Ensure if one MPI process raises an un-caught exception, the program shuts down.
 
-    More details at: https://bugs.python.org/issue38119
+    Args:
+        comm (mpi4py.MPI.Comm): The MPI communicator or None.
+        timeout (int): The number of seconds to wait before aborting all processes
+
     """
-
-    def fix_register(name, rtype):
-        if rtype == "shared_memory":
-            return
-        return resource_tracker._resource_tracker.register(self, name, rtype)
-    resource_tracker.register = fix_register
-
-    def fix_unregister(name, rtype):
-        if rtype == "shared_memory":
-            return
-        return resource_tracker._resource_tracker.unregister(self, name, rtype)
-    resource_tracker.unregister = fix_unregister
-
-    if "shared_memory" in resource_tracker._CLEANUP_FUNCS:
-        del resource_tracker._CLEANUP_FUNCS["shared_memory"]
+    rank = 0 if comm is None else comm.rank
+    try:
+        yield
+    except Exception:
+        # Note that the intention of this function is to handle *any* exception.
+        # The typical use case is to wrap main() and ensure that the job exits
+        # cleanly.
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        lines = [f"Proc {rank}: {x}" for x in lines]
+        msg = "".join(lines)
+        print(msg, flush=True)
+        # kills the job
+        if comm is None or comm.size == 1:
+            # Raising the exception allows for debugging
+            raise
+        else:
+            if comm.size > 1:
+                # gives other processes a bit of time to see whether
+                # they encounter the same error
+                time.sleep(timeout)
+            comm.Abort(1)

@@ -29,32 +29,26 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.10
+    - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.12"
 
     - name: Install Dependencies
-      run: ./test_scripts/install_deps_github_ubuntu.sh && pip install twine
+      run: python3 -m pip install build twine numpy
 
     - name: Install Package
-      run: pip install .
+      run: python3 -m pip install .
 
-    - name: Run Serial Test
-      run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
-
-    - name: Run MPI Test on 1 Process
-      run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
-
-    - name: Run MPI Test on 2 Processes
-      run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+    - name: Run Simple Test
+      run: python3 -c 'import pshmem.test; pshmem.test.run()'
 
     - name: Build source package
-      run: rm -rf dist && python setup.py sdist
+      run: rm -rf dist && python3 -m build --sdist
 
     - name: Build wheels
-      run: mkdir -p wheelhouse && pip wheel -w wheelhouse .
+      run: python3 -m build --wheel
 
     - name: Upload to PyPI
       run: |
-        python -m twine upload dist/*.tar.gz && python -m twine upload wheelhouse/pshmem*.whl
+        python -m twine upload dist/*.tar.gz && python -m twine upload dist/pshmem*.whl

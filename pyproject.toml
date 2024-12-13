@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools", "versioneer[toml]==0.29"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pshmem"
+dynamic = ["version"]
+description = "Parallel shared memory and locking with MPI"
+readme = "README.md"
+maintainers = [
+    { name = "Theodore Kisner", email = "tskisner.public@gmail.com" },
+]
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+mpi = [
+    "mpi4py",
+]
+
+[project.urls]
+"Source" = "https://github.com/tskisner/pshmem"
+"Issue Tracker" = "https://github.com/tskisner/pshmem/issues"
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "pshmem/_version.py"
+versionfile_build = "pshmem/_version.py"
+tag_prefix = ""
+parentdir_prefix = "pshmem-"

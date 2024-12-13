@@ -8,16 +8,24 @@ shared memory constructs.
 This package needs a recent version of the `mpi4py` package in order to be useful.
 However, the classes also accept a value of `None` for the communicator, in which case a
 trivial local implementation is used.  The code uses other widely available packages
-(like numpy) and requires a recent Python3 installation.  You can install the code from
-a git checkout with:
+(like numpy) and requires a recent Python3 installation.
+
+### Binary Packages
+
+Wheels are available on PyPI:
+
+    pip install pshmem
+
+Or on conda-forge:
+
+    conda install -c conda-forge pshmem
+
+### Installing from Source
+
+You can install the code from a git checkout with:
 
     pip install .
 
-Or:
-
-    python3 setup.py install
-
-Or directly from github.
 
 ## MPIShared Class
 

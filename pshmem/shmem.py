@@ -1,23 +1,19 @@
 ##
-# Copyright (c) 2017-2024, all rights reserved.  Use of this source code
+# Copyright (c) 2017-2025, all rights reserved.  Use of this source code
 # is governed by a BSD license that can be found in the top-level
 # LICENSE file.
 ##
 
 import sys
-from multiprocessing import shared_memory
 
 import numpy as np
 
+from .registry import registry
 from .utils import (
+    SharedMemory,
     mpi_data_type,
     random_shm_key,
-    remove_shm_from_resource_tracker,
 )
-
-# Monkey patch resource_tracker.  Remove once upstream CPython
-# changes are merged.
-remove_shm_from_resource_tracker()
 
 
 class MPIShared(object):
@@ -183,10 +179,14 @@ class MPIShared(object):
                 self.data = self._flat.reshape(self._shape)
             else:
                 # First rank on each node creates the buffer
+                mem_err = 0
                 if self._noderank == 0:
                     try:
-                        self._shmem = shared_memory.SharedMemory(
-                            name=self._name, create=True, size=int(nbytes),
+                        self._shmem = SharedMemory(
+                            name=self._name,
+                            create=True,
+                            size=int(nbytes),
+                            track=False,
                         )
                     except Exception as e:
                         msg = "Process {}: {}".format(self._rank, self._name)
@@ -196,17 +196,22 @@ class MPIShared(object):
                         )
                         msg += ": {}".format(e)
                         print(msg, flush=True)
-                        raise
-
-                # Wait for that to be created
+                        mem_err = 1
+                # All ranks check for error
                 if self._nodecomm is not None:
-                    self._nodecomm.barrier()
+                    mem_err = self._nodecomm.bcast(mem_err, root=0)
+                if mem_err != 0:
+                    raise RuntimeError("Failed to allocate shared memory")
 
                 # Other ranks on the node attach
+                mem_err = 0
                 if self._noderank != 0:
                     try:
-                        self._shmem = shared_memory.SharedMemory(
-                            name=self._name, create=False, size=int(nbytes)
+                        self._shmem = SharedMemory(
+                            name=self._name,
+                            create=False,
+                            size=int(nbytes),
+                            track=False,
                         )
                     except Exception as e:
                         msg = "Process {}: {}".format(self._rank, self._name)
@@ -216,7 +221,15 @@ class MPIShared(object):
                         )
                         msg += ": {}".format(e)
                         print(msg, flush=True)
-                        raise
+                        mem_err = 1
+                if self._nodecomm is not None:
+                    mem_err = self._nodecomm.allreduce(mem_err, op=MPI.SUM)
+                if mem_err != 0:
+                    raise RuntimeError("Failed to attach to shared memory")
+
+                # Register the shared memory buffer for cleanup if program is
+                # terminated.
+                registry.register(self._name, self._shmem, self._noderank)
 
                 # Create a numpy array which acts as a view of the buffer.
                 self._flat = np.ndarray(
@@ -363,6 +376,8 @@ class MPIShared(object):
             del self._flat
         if hasattr(self, "_shmem"):
             if self._shmem is not None:
+                # Unregister the shared memory buffer, since we are about to close it.
+                registry.unregister(self._name)
                 self._shmem.close()
                 if self._noderank == 0:
                     self._shmem.unlink()
