@@ -531,8 +531,8 @@ def run():
         comm = MPI.COMM_WORLD
 
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(LockTest))
-    suite.addTest(unittest.makeSuite(ShmemTest))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(LockTest))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ShmemTest))
     runner = unittest.TextTestRunner()
 
     ret = 0

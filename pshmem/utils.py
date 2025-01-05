@@ -26,8 +26,7 @@ else:
         __lock = threading.Lock()
 
         def __init__(
-            self, name: str | None = None, create: bool = False,
-            size: int = 0, *, track: bool = True
+            self, name=None, create=False, size=0, *, track=True
         ) -> None:
             self._track = track
 
