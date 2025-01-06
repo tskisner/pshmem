@@ -1,72 +1,105 @@
-# Use pre-built docker containers to run our unit tests on different python versions.
+# In general, we try to run on:
+# - The oldest supported python
+# - The latest stable python that is the common default on most systems and conda
+# - (During transitions) The newly released bleeding edge python
 
-name:  Tests
+name:  Run Test Suite
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
   pull_request:
-    branches: [ master ]
+    branches:
+      - master
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
+  test:
+    name: Tests on ${{ matrix.arch }} with Conda Python-${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -l {0}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.10", "3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python: "3.9"
+            arch: Linux-x86_64
+          - os: ubuntu-latest
+            python: "3.11"
+            arch: Linux-x86_64
+          - os: ubuntu-latest
+            python: "3.13"
+            arch: Linux-x86_64
+          - os: macos-latest
+            python: "3.10"
+            arch: MacOSX-x86_64
+          - os: macos-latest
+            python: "3.13"
+            arch: MacOSX-x86_64
+          - os: macos-latest
+            python: "3.10"
+            arch: MacOSX-arm64
+          - os: macos-latest
+            python: "3.13"
+            arch: MacOSX-arm64
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Setup Conda Base
+        run: |
+          sudo rm -rf /usr/share/miniconda \
+            && sudo rm -rf /usr/local/miniconda \
+            && curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-${{ matrix.arch }}.sh \
+            && bash miniforge.sh -b -f -p ~/conda \
+            && source ~/conda/etc/profile.d/conda.sh \
+            && conda activate base \
+            && conda update -n base --yes conda
 
-    - name: Install Dependencies
-      run: ./test_scripts/install_deps_github_ubuntu.sh
+      - name: Check Conda Config
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate base \
+            && conda info \
+            && conda list \
+            && conda config --show-sources \
+            && conda config --show
 
-    - name: Install Package
-      run: pip3 install .
+      - name: Install Dependencies
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda create --yes -n test python==${{ matrix.python }} \
+            && conda activate test \
+            && conda install --yes numpy mpich mpi4py
 
-    - name: Run Serial Test
-      run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
+      - name: Install
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate test \
+            && pip install .
 
-    - name: Run MPI Test on 1 Process
-      run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
+      - name: Run Serial Tests
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate test \
+            && mkdir -p test \
+            && pushd test >/dev/null 2>&1 \
+            && MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()' \
+            && popd >/dev/null 2>&1
 
-    - name: Run MPI Test on 2 Processes
-      run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
-
-  macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install Dependencies
-      run: ./test_scripts/install_deps_github_macos.sh
-
-    - name: Install Package
-      run: pip3 install .
-
-    - name: Run Serial Test
-      run: MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
-
-    - name: Run MPI Test on 1 Process
-      run: mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()'
-
-    - name: Run MPI Test on 2 Processes
-      run: mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
+      - name: Run MPI Tests
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate test \
+            && mkdir -p test \
+            && pushd test >/dev/null 2>&1 \
+            && mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()' \
+            && mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()' \
+            && popd >/dev/null 2>&1
