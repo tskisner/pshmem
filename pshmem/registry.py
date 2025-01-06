@@ -56,5 +56,5 @@ def _register_signals():
     signal.signal(signal.SIGHUP, _signal_handler)
 
 
-# Register signals on import
+# Register signal handlers on import
 _register_signals()

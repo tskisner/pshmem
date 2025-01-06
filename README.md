@@ -16,7 +16,7 @@ Wheels are available on PyPI:
 
     pip install pshmem
 
-Or on conda-forge:
+Or you can install packages from conda-forge:
 
     conda install -c conda-forge pshmem
 
