@@ -20,10 +20,18 @@ class MPISharedRegistry:
         self.reg = dict()
 
     def register(self, name, buffer, noderank):
+        if name in self.reg:
+            msg = f"Buffer {name} already registered on node rank {noderank}"
+            raise RuntimeError(msg)
         self.reg[name] = (buffer, noderank)
 
     def unregister(self, name):
-        del self.reg[name]
+        if name in self.reg:
+            buf, noderank = self.reg[name]
+            buf.close()
+            if noderank == 0:
+                buf.unlink()
+            del self.reg[name]
 
     def cleanup(self):
         for name, (buf, noderank) in self.reg.items():

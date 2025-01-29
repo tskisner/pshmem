@@ -376,12 +376,8 @@ class MPIShared(object):
             del self._flat
         if hasattr(self, "_shmem"):
             if self._shmem is not None:
-                # Unregister the shared memory buffer, since we are about to close it.
+                # Unregister the shared memory buffer and close it.
                 registry.unregister(self._name)
-                self._shmem.close()
-                if self._noderank == 0:
-                    self._shmem.unlink()
-                del self._shmem
                 self._shmem = None
         self._flat = None
         self.data = None
