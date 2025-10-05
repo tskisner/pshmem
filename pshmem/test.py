@@ -7,12 +7,16 @@
 import os
 import sys
 import unittest
+import random
+import tempfile
+import time
 
 import numpy as np
 import numpy.testing as nt
 
 from .shmem import MPIShared
 from .locking import MPILock
+from .batch import MPIBatch
 from .utils import exception_guard
 
 MPI = None
@@ -525,6 +529,99 @@ class LockTest(unittest.TestCase):
             self.comm.barrier()
 
 
+class BatchTest(unittest.TestCase):
+    def setUp(self):
+        self.comm = None
+        if MPI is not None:
+            self.comm = MPI.COMM_WORLD
+        self.rank = 0
+        self.procs = 1
+        if self.comm is not None:
+            self.rank = self.comm.rank
+            self.procs = self.comm.size
+
+    def tearDown(self):
+        pass
+
+    def fake_work(self, wrk_comm):
+        if wrk_comm is None or wrk_comm.rank == 0:
+            slp = 0.5 + random.random()
+            time.sleep(slp)
+        if wrk_comm is not None:
+            wrk_comm.barrier()
+
+    def test_batch(self):
+        ntask = 10
+        if self.procs > 2:
+            group_size = self.procs // 2
+        else:
+            group_size = 1
+        batch = MPIBatch(self.comm, group_size, ntask, debug=True)
+
+        task = -1
+        while task is not None:
+            task = batch.next_task()
+            if task is None:
+                break
+            try:
+                self.fake_work(batch.worker_comm)
+                if batch.worker_rank == 0:
+                    batch.set_task_state(task, batch.DONE)
+            except Exception:
+                if batch.worker_rank == 0:
+                    batch.set_task_state(task, batch.FAILED)
+
+        if self.comm is not None:
+            self.comm.barrier()
+
+    def test_filesystem(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        ntask = 10
+        task_names = [f"task_{x:03d}" for x in range(ntask)]
+
+        if self.procs > 2:
+            group_size = self.procs // 2
+        else:
+            group_size = 1
+
+        out_root = None
+        if rank == 0:
+            tempdir = tempfile.TemporaryDirectory()
+            out_root = tempdir.name
+        if self.comm is not None:
+            out_root = self.comm.bcast(out_root, root=0)
+
+        batch = MPIBatch(
+            self.comm,
+            group_size,
+            ntask,
+            task_fs_root=out_root,
+            task_fs_names=task_names,
+            debug=True,
+        )
+
+        task = -1
+        while task is not None:
+            task = batch.next_task()
+            if task is None:
+                break
+            try:
+                self.fake_work(batch.worker_comm)
+                if batch.worker_rank == 0:
+                    batch.set_task_state(task, batch.DONE)
+            except Exception:
+                if batch.worker_rank == 0:
+                    batch.set_task_state(task, batch.FAILED)
+
+        if self.comm is not None:
+            self.comm.barrier()
+        if rank == 0:
+            tempdir.cleanup()
+
+
 def run():
     comm = None
     if MPI is not None:
@@ -533,6 +630,7 @@ def run():
     suite = unittest.TestSuite()
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(LockTest))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ShmemTest))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(BatchTest))
     runner = unittest.TextTestRunner()
 
     ret = 0
