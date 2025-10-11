@@ -5,14 +5,18 @@
 ##
 
 import os
+import random
 import sys
 import unittest
+import tempfile
+import time
 
 import numpy as np
 import numpy.testing as nt
 
 from .shmem import MPIShared
 from .locking import MPILock
+from .batch import MPIBatch
 from .utils import exception_guard
 
 MPI = None
@@ -525,6 +529,105 @@ class LockTest(unittest.TestCase):
             self.comm.barrier()
 
 
+class BatchTest(unittest.TestCase):
+    def setUp(self):
+        self.comm = None
+        if MPI is not None:
+            self.comm = MPI.COMM_WORLD
+        self.rank = 0
+        self.procs = 1
+        if self.comm is not None:
+            self.rank = self.comm.rank
+            self.procs = self.comm.size
+
+    def tearDown(self):
+        pass
+
+    def fake_work(self, wrk_comm):
+        if wrk_comm is None or wrk_comm.rank == 0:
+            slp = 0.2 + 0.5 * random.random()
+            time.sleep(slp)
+        if wrk_comm is not None:
+            wrk_comm.barrier()
+
+    def run_batch(self, use_fs):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        ntask = 25
+        if self.procs % 2 == 0:
+            # Use workers of 2 procs
+            worker_size = 2
+        else:
+            # Single proc workers
+            worker_size = 1
+
+        out_root = None
+        task_names = None
+        tempdir = None
+        if use_fs:
+            task_names = [f"task_{x:03d}" for x in range(ntask)]
+            if rank == 0:
+                tempdir = tempfile.TemporaryDirectory()
+                out_root = tempdir.name
+            if self.comm is not None:
+                out_root = self.comm.bcast(out_root, root=0)
+
+        batch = MPIBatch(
+            self.comm,
+            worker_size,
+            ntask,
+            task_fs_root=out_root,
+            task_fs_names=task_names,
+            debug=True,
+        )
+
+        # Track the tasks executed by each worker to ensure that
+        # each task is processed exactly once.
+        proc_tasks = np.zeros(ntask, dtype=np.int32)
+
+        task = -1
+        while task is not None:
+            task = batch.next_task()
+            if task is None:
+                break
+            try:
+                proc_tasks[task] += 1
+                self.fake_work(batch.worker_comm)
+                if batch.worker_rank == 0:
+                    batch.set_task_state(task, batch.DONE)
+            except Exception:
+                if batch.worker_rank == 0:
+                    batch.set_task_state(task, batch.FAILED)
+
+        if self.comm is not None:
+            self.comm.barrier()
+        if use_fs and rank == 0:
+            tempdir.cleanup()
+
+        if batch.worker_rank == 0:
+            msg = f"Worker {batch.worker} tasks = {proc_tasks}"
+            print(msg, flush=True)
+        del batch
+
+        if self.comm is None:
+            all_tasks = proc_tasks
+        else:
+            all_tasks = self.comm.allreduce(proc_tasks, op=MPI.SUM)
+        bad_task = all_tasks != worker_size
+        if np.count_nonzero(bad_task) > 0:
+            msg = f"Tasks not executed by exactly one worker: {all_tasks}"
+            print(msg, flush=True)
+            self.assertTrue(False)
+
+    def test_batch(self):
+        self.run_batch(False)
+
+    def test_filesystem(self):
+        self.run_batch(True)
+
+
 def run():
     comm = None
     if MPI is not None:
@@ -533,6 +636,7 @@ def run():
     suite = unittest.TestSuite()
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(LockTest))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ShmemTest))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(BatchTest))
     runner = unittest.TextTestRunner()
 
     ret = 0

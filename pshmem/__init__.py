@@ -19,6 +19,7 @@ del get_versions
 
 from .shmem import MPIShared
 from .locking import MPILock
+from .batch import MPIBatch
 
 from . import _version
 __version__ = _version.get_versions()['version']
