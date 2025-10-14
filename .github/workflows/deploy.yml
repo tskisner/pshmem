@@ -39,9 +39,9 @@ jobs:
       run: python3 -m build --wheel
 
     - uses: actions/upload-artifact@v4
-        with:
-          name: pshmem
-          path: ./dist/pshmem*.whl
+      with:
+        name: pshmem
+        path: ./dist/pshmem*.whl
 
   upload_pypi:
     needs: wheels
