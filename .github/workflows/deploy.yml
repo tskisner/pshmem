@@ -3,24 +3,13 @@
 name:  Deploy Release
 
 on:
-  push:
-    tags:
-      - '*'
-
-# This is for debugging.
-# on:
-#   push:
-#     branches: [ master ]
-#   pull_request:
-#     branches: [ master ]
+  workflow_dispatch:
+  release:
+    types: [ published ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  TWINE_USERNAME: __token__
-  TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
 
 jobs:
   wheels:
@@ -35,7 +24,7 @@ jobs:
         python-version: "3.12"
 
     - name: Install Dependencies
-      run: python3 -m pip install build twine numpy
+      run: python3 -m pip install build numpy
 
     - name: Install Package
       run: python3 -m pip install .
@@ -49,6 +38,23 @@ jobs:
     - name: Build wheels
       run: python3 -m build --wheel
 
-    - name: Upload to PyPI
-      run: |
-        python -m twine upload dist/*.tar.gz && python -m twine upload dist/pshmem*.whl
+    - uses: actions/upload-artifact@v4
+        with:
+          name: pshmem
+          path: ./dist/pshmem*.whl
+
+  upload_pypi:
+    needs: wheels
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          # Unpacks all artifacts into dist/
+          pattern: pshmem-*
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -10,16 +10,10 @@ and implementing communicator-wide MUTEX locks.
 
 """
 
-from ._version import get_versions
-
-__version__ = get_versions()["version"]
-del get_versions
+from ._version import __version__
 
 # Namespace imports
 
 from .shmem import MPIShared
 from .locking import MPILock
 from .batch import MPIBatch
-
-from . import _version
-__version__ = _version.get_versions()['version']
