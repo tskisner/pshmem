@@ -56,7 +56,7 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           # Unpacks all artifacts into dist/
-          pattern: pshmem-*
+          pattern: pshmem*
           path: dist
           merge-multiple: true
 
