@@ -186,6 +186,150 @@ with MPILock(MPI.COMM_WORLD) as mpilock:
     mpilock.unlock()
 ```
 
+## MPIBatch Class
+
+This class is useful for a common pattern where a pool of "workers", each
+consisting of multiple processes, needs to complete "tasks" of varying size. The
+fact that each worker is a group of processes means we cannot use the standard
+MPIPoolExecutor from mpi4py. This scenario also means that it is difficult to
+recover from errors like a segmentation fault (since there is no "nanny"
+process). Still, there are many applications where groups of processes need to
+work on a fixed number of tasks and dynamically assign those tasks to a smaller
+number of workers.
+
+By default, the state of tasks are tracked purely in MPI shared memory. The
+calling code is responsible for initializing the state of each task from
+external information. There is also support for simple use of the filesystem for
+state tracking in addition to the in-memory copy. This assumes a top-level
+directory with a subdirectory for each task. A special "state" file is created
+in each task directory and the `MPIBatch` class ensures that only one process at
+a time modifies that state file and the in-memory copy. Using the filesystem can
+also help when running multiple batch instances that are working on the same set
+of tasks.
+
+
+### Example
+
+Here is an example using `MPIBatch` to track the state of tasks using the
+filesystem (not just in memory).  For that use case, the tasks must have
+a "name" which is used as a subdirectory.  Note that if you run this script
+twice, make sure to remove the output directory- otherwise nothing will
+happen since all tasks are done.
+
+```python
+import random
+import time
+import numpy as np
+from mpi4py import MPI
+
+from pshmem import MPIBatch
+
+comm = MPI.COMM_WORLD
+
+def fake_task_work(wrk_comm):
+    """A function which emulates the work for a single task.
+    """
+    # All processes in the worker group so something.
+    slp = 0.2 + 0.2 * random.random()
+    time.sleep(slp)
+    # Wait until everyone in the group is done.
+    if wrk_comm is not None:
+        wrk_comm.barrier()
+
+ntask = 10
+
+# The top-level directory
+task_dir = "test"
+
+# The "names" (subdirectories) of each task
+task_names = [f"task_{x:03d}" for x in range(ntask)]
+
+# Two workers
+worker_size = 1
+if comm.size > 1:
+    worker_size = comm.size // 2
+
+# Create the batch system to track the state of tasks.
+batch = MPIBatch(
+    comm,
+    worker_size,
+    ntask,
+    task_fs_root=task_dir,
+    task_fs_names=task_names,
+)
+
+# Track the tasks executed by each worker to so we can
+# display that at the end.  This variable is only for
+# purposes of printing.
+proc_tasks = batch.INVALID * np.ones(ntask, dtype=np.int32)
+
+# Workers loop over tasks until there are no more left.
+task = -1
+while task is not None:
+    task = batch.next_task()
+    if task is None:
+        # Nothing left for this worker
+        break
+    try:
+        proc_tasks[task] = batch.RUNNING
+        fake_task_work(batch.worker_comm)
+        if batch.worker_rank == 0:
+            # Only one process in the worker group needs
+            # to update the state.
+            batch.set_task_state(task, batch.DONE)
+        proc_tasks[task] = batch.DONE
+    except Exception:
+        # The task raised an exception, mark this task
+        # as failed.
+        if batch.worker_rank == 0:
+            # Only one process in the worker group needs
+            # to update the state.
+            batch.set_task_state(task, batch.FAILED)
+        proc_tasks[task] = batch.FAILED
+
+# Wait for all workers to finish
+comm.barrier()
+
+# Each worker reports on their status
+for iwork in range(batch.n_worker):
+    if iwork == batch.worker:
+        if batch.worker_rank == 0:
+            proc_stat = [MPIBatch.state_to_string(x) for x in proc_tasks]
+            msg = f"Worker {batch.worker} tasks = {proc_stat}"
+            print(msg, flush=True)
+    batch.comm.barrier()
+
+# Cleanup
+del batch
+```
+
+Putting this code into a script called `test_batch.py` and running it
+produces:
+```
+mpirun -np 4 python3 test.py
+
+Worker 0 tasks = ['DONE', 'INVALID', 'INVALID', 'DONE', 'INVALID', 'DONE', 'INVALID', 'DONE', 'DONE', 'INVALID']
+Worker 1 tasks = ['INVALID', 'DONE', 'DONE', 'INVALID', 'DONE', 'INVALID', 'DONE', 'INVALID', 'INVALID', 'DONE']
+```
+
+So you can see that tasks are assigned to different worker groups as those workers
+complete previous tasks.  The state is tracked on the filesystem with a `state` file
+in each task directory.  After running the script above we can look at the contents
+of those:
+```
+cat test/*/state
+DONE
+DONE
+DONE
+DONE
+DONE
+DONE
+DONE
+DONE
+DONE
+DONE
+```
+
 ## Tests
 
 After installation, you can run some tests with:
