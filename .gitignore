@@ -1,3 +1,6 @@
+# Generated sources
+src/pshmem/_version.py
+
 # Python binary
 *__pycache__
 *.pyc

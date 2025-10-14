@@ -89,17 +89,11 @@ jobs:
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate test \
-            && mkdir -p test \
-            && pushd test >/dev/null 2>&1 \
-            && MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()' \
-            && popd >/dev/null 2>&1
+            && MPI_DISABLE=1 python3 -c 'import pshmem.test; pshmem.test.run()'
 
       - name: Run MPI Tests
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate test \
-            && mkdir -p test \
-            && pushd test >/dev/null 2>&1 \
             && mpirun -np 1 python3 -c 'import pshmem.test; pshmem.test.run()' \
-            && mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()' \
-            && popd >/dev/null 2>&1
+            && mpirun -np 2 python3 -c 'import pshmem.test; pshmem.test.run()'
