@@ -543,7 +543,16 @@ class MPIShared(object):
                     nodedata = np.zeros(datashape, dtype=self._dtype)
 
                 # Broadcast the data buffer
-                self._rankcomm.Bcast([nodedata, self._mpitype], root=fromnode)
+                nodedata = nodedata.reshape(-1, copy=False)
+                maxlen = 2**30
+                start = 0
+                while start < nodedata.size:
+                    stop = min(start + maxlen, nodedata.size)
+                    self._rankcomm.Bcast(
+                        [nodedata[start:stop], self._mpitype], root=fromnode
+                    )
+                    start = stop
+                nodedata = nodedata.reshape(datashape, copy=False)
 
                 # Now one process on every node has a copy of the data, and
                 # can copy it into the shared memory buffer.
