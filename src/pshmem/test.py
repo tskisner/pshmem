@@ -220,6 +220,45 @@ class ShmemTest(unittest.TestCase):
             print("Testing MPIShared with world communicator...", flush=True)
         self.context_write_read(self.comm)
 
+    def test_large(self):
+        """Test use of buffers larger than 2^31 elements."""
+
+        if "PSHMEM_TEST_LARGE" not in os.environ:
+            print("Skipping large (> 2^31 elements) array test.", flush=True)
+            return
+        rank = 0
+        nproc = 1
+        if self.comm is not None:
+            rank = self.comm.rank
+            nproc = self.comm.size
+
+        # Dimensions / type of our shared memory array
+        n_elem = np.iinfo(np.int32).max + 10
+        datadims = (n_elem,)
+        datatype = np.dtype(np.uint8)
+
+        # Create local data on one process
+        if rank == 0:
+            local = np.ones(datadims, dtype=datatype)
+        else:
+            local = None
+
+        with MPIShared(datadims, datatype, self.comm) as shm:
+            shm.set(local, fromrank=0)
+            del local
+
+            # Check results on all processes.  Take turns since this is a
+            # large memory buffer.
+            for proc in range(nproc):
+                if proc == rank:
+                    check = np.zeros(datadims, dtype=datatype)
+                    check[:] = shm[:]
+                    count = np.count_nonzero(check)
+                    self.assertTrue(count == n_elem)
+                    del check
+                if self.comm is not None:
+                    self.comm.barrier()
+
     def test_separated(self):
         if self.comm is None:
             print("Testing separated create/close without MPI...", flush=True)
