@@ -41,7 +41,7 @@ jobs:
     - name: Build wheels
       run: python3 -m build --wheel
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: pshmem
         path: ./dist/pshmem*.whl
