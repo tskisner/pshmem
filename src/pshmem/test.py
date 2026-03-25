@@ -247,17 +247,12 @@ class ShmemTest(unittest.TestCase):
             shm.set(local, fromrank=0)
             del local
 
-            # Check results on all processes.  Take turns since this is a
-            # large memory buffer.
-            for proc in range(nproc):
-                if proc == rank:
-                    check = np.zeros(datadims, dtype=datatype)
-                    check[:] = shm[:]
-                    count = np.count_nonzero(check)
-                    self.assertTrue(count == n_elem)
-                    del check
-                if self.comm is not None:
-                    self.comm.barrier()
+            # Check results on all processes.
+            count = np.count_nonzero(shm[:])
+            self.assertTrue(count == n_elem)
+
+            if self.comm is not None:
+                self.comm.barrier()
 
     def test_separated(self):
         if self.comm is None:
