@@ -596,7 +596,9 @@ class MPIShared(object):
             for d in range(ndims):
                 dslice.append(slice(offset[d], offset[d] + data.shape[d], 1))
             slc = tuple(dslice)
+            self._unlock_memory()
             self.data[slc] = data
+            self._lock_memory()
 
         # Explicit barrier here, to ensure that other processes do not try
         # reading data before the writing processes have finished.
