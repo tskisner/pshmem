@@ -175,6 +175,7 @@ class MPIShared(object):
                     self._n,
                     dtype=self._dtype,
                 )
+                self._lock_memory()
                 # Wrap
                 self.data = self._flat.reshape(self._shape)
             else:
@@ -198,8 +199,7 @@ class MPIShared(object):
                         print(msg, flush=True)
                         mem_err = 1
                 # All ranks check for error
-                if self._nodecomm is not None:
-                    mem_err = self._nodecomm.bcast(mem_err, root=0)
+                mem_err = self._nodecomm.bcast(mem_err, root=0)
                 if mem_err != 0:
                     raise RuntimeError("Failed to allocate shared memory")
 
@@ -222,8 +222,7 @@ class MPIShared(object):
                         msg += ": {}".format(e)
                         print(msg, flush=True)
                         mem_err = 1
-                if self._nodecomm is not None:
-                    mem_err = self._nodecomm.allreduce(mem_err, op=MPI.SUM)
+                mem_err = self._nodecomm.allreduce(mem_err, op=MPI.SUM)
                 if mem_err != 0:
                     raise RuntimeError("Failed to attach to shared memory")
 
@@ -242,12 +241,28 @@ class MPIShared(object):
                 if self._noderank == 0:
                     self._flat[:] = 0
 
+                # Lock
+                self._lock_memory()
+
                 # Wrap
                 self.data = self._flat.reshape(self._shape)
 
                 # Wait for other processes to attach and wrap
-                if self._nodecomm is not None:
-                    self._nodecomm.barrier()
+                self._nodecomm.barrier()
+
+    def _lock_memory(self):
+        """Ensure that the underlying memory has writeable=False"""
+        if self.data is None:
+            return
+        self._flat.flags.writeable = False
+        self.data.flags.writeable = False
+
+    def _unlock_memory(self):
+        """Temporarily set writeable to True"""
+        if self.data is None:
+            return
+        self._flat.flags.writeable = True
+        self.data.flags.writeable = True
 
     def __del__(self):
         self.close()
@@ -276,7 +291,9 @@ class MPIShared(object):
             raise RuntimeError("Data size is zero- cannot assign elements")
         if self._comm is None:
             # shortcut for the serial case
+            self._unlock_memory()
             self.data[key] = value
+            self._lock_memory()
             return
         # WARNING: Using this function will have a performance penalty over using
         # the explicit 'set()' method, since this function must first communicate to
@@ -566,7 +583,9 @@ class MPIShared(object):
                 slc = tuple(dslice)
 
                 # Copy data slice
+                self._unlock_memory()
                 self.data[slc] = nodedata
+                self._lock_memory()
 
                 # Delete the temporary copy
                 del nodedata
@@ -577,7 +596,9 @@ class MPIShared(object):
             for d in range(ndims):
                 dslice.append(slice(offset[d], offset[d] + data.shape[d], 1))
             slc = tuple(dslice)
+            self._unlock_memory()
             self.data[slc] = data
+            self._lock_memory()
 
         # Explicit barrier here, to ensure that other processes do not try
         # reading data before the writing processes have finished.
