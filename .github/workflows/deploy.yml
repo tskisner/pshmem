@@ -44,7 +44,7 @@ jobs:
     - uses: actions/upload-artifact@v7
       with:
         name: pshmem
-        path: ./dist/pshmem*.whl
+        path: ./dist/pshmem*
 
   upload_pypi:
     needs: wheels
