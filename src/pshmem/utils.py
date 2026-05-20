@@ -4,7 +4,7 @@
 # LICENSE file.
 ##
 
-import random
+import secrets
 import sys
 import threading
 import time
@@ -96,21 +96,22 @@ def mpi_data_type(comm, dt):
     return (dsize, mpitype)
 
 
-def random_shm_key():
-    """Get a random positive integer for using in shared memory naming.
+def random_shm_name():
+    """Get a random string for use in shared memory naming.
 
-    The python random library is used, and seeded with the default source
-    (either system time or os.urandom).
+    The naming convention used is similar to the syntax in
+    multiprocessing.shared_memory.SharedMemory.
 
     Returns:
-        (int):  The random integer.
+        (str):  The random name.
 
     """
-    min_val = 0
-    max_val = sys.maxsize
-    # Seed with default source of randomness
-    random.seed(a=None)
-    return random.randint(min_val, max_val)
+    # Copy the conventions used in python SharedMemory
+    prefix = "psm_"
+    rnbytes = 4 # 14 byte limit on BSD, minus prefix, minus slash, minus termination
+    hex = secrets.token_hex(rnbytes)
+    name = f"{prefix}{hex}"
+    return name
 
 
 @contextmanager
