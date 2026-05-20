@@ -62,6 +62,8 @@ def _register_signals():
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGQUIT, _signal_handler)
     signal.signal(signal.SIGHUP, _signal_handler)
+    signal.signal(signal.SIGABRT, _signal_handler)
+    signal.signal(signal.SIGSEGV, _signal_handler)
 
 
 # Register signal handlers on import

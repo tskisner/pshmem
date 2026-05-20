@@ -12,7 +12,7 @@ from .registry import registry
 from .utils import (
     SharedMemory,
     mpi_data_type,
-    random_shm_key,
+    random_shm_name,
 )
 
 
@@ -151,12 +151,9 @@ class MPIShared(object):
         self._name = None
         self._shm_index = None
         if self._rank == 0:
-            # Get a random 64bit integer between the supported range of keys
-            self._shm_index = random_shm_key()
             # Name, used as global tag.
-            self._name = f"MPIShared_{self._shm_index}"
+            self._name = random_shm_name()
         if self._comm is not None:
-            self._shm_index = self._comm.bcast(self._shm_index, root=0)
             self._name = self._comm.bcast(self._name, root=0)
 
         # Only allocate our buffers if the total number of elements is > 0
